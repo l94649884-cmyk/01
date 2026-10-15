@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "name": "cantilever",
+  "nodes": [
+    {
+      "id": "N1",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "id": "N2",
+      "x": 3,
+      "y": 0
+    }
+  ],
+  "members": [
+    {
+      "id": "B1",
+      "start": "N1",
+      "end": "N2",
+      "E": 210,
+      "I": 8000
+    }
+  ],
+  "supports": [
+    {
+      "id": "S1",
+      "nodeId": "N1",
+      "kind": "fixed"
+    }
+  ],
+  "pointLoads": [
+    {
+      "id": "P1",
+      "memberId": "B1",
+      "at": 3,
+      "value": 10
+    }
+  ],
+  "distributedLoads": []
+}
