@@ -33,10 +33,20 @@ class Support(StrictModel):
 
 class PointLoad(StrictModel):
     id: Id
-    memberId: Id
-    at: float = Field(ge=0, le=3000, description="m from member start along actual member length")
+    memberId: Id | None = None
+    at: float | None = Field(default=None, ge=0, le=3000, description="m from member start along actual member length")
+    pointId: Id | None = None
     value: float = Field(ge=-1e6, le=1e6, description="kN; positive acts along the negative global axis")
     direction: Literal["x", "y"] = "y"
+
+    @model_validator(mode="after")
+    def one_target(self):
+        if self.pointId is not None:
+            if self.memberId is not None or self.at is not None:
+                raise ValueError("连接作用点时不能同时指定杆件位置。")
+        elif self.memberId is None or self.at is None:
+            raise ValueError("集中力需要作用点，或杆件与位置。")
+        return self
 
 
 class DistributedLoad(StrictModel):

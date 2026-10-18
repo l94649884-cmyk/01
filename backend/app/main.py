@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from .models import BeamModel
 from .solver import ModelError, solve_beam, validate_model
 
-app = FastAPI(title="力构 Lab · 二维梁与刚架分析 API", version="0.6.0")
+app = FastAPI(title="力构 Lab · 二维梁与刚架分析 API", version="0.7.0")
 
 
 @app.exception_handler(RequestValidationError)
@@ -25,7 +25,7 @@ async def invalid_model(_: Request, exc: ModelError):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "solver": "2D Euler–Bernoulli frame", "version": "0.6.0"}
+    return {"status": "ok", "solver": "2D Euler–Bernoulli frame", "version": "0.7.0"}
 
 
 @app.post("/api/validate")

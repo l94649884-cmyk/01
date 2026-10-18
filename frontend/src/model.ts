@@ -9,7 +9,7 @@ export const modelSchema = z.object({
   nodes: z.array(z.object({ id, x: coord, y: coord }).strict()).max(80),
   members: z.array(z.object({ id, start: id, end: id, E: z.number().finite().min(1e-6).max(10000), I: z.number().finite().min(1e-6).max(1e10), A: z.number().finite().min(1e-6).max(1e8).optional() }).strict()).max(79),
   supports: z.array(z.object({ id, nodeId: id, kind: z.enum(['pin', 'roller', 'fixed']) }).strict()).max(80),
-  pointLoads: z.array(z.object({ id, memberId: id, at: z.number().finite().min(0).max(3000), value, direction: z.enum(['x','y']).optional() }).strict()).max(100),
+  pointLoads: z.array(z.object({ id, memberId: id.optional(), at: z.number().finite().min(0).max(3000).optional(), pointId:id.optional(), value, direction: z.enum(['x','y']).optional() }).strict().refine(p=>p.pointId!==undefined?p.memberId===undefined&&p.at===undefined:p.memberId!==undefined&&p.at!==undefined,'集中力需要作用点或杆件位置')).max(100),
   distributedLoads: z.array(z.object({ id, memberId: id, value, direction: z.enum(['x','y']).optional(), start: z.number().finite().min(0).max(3000).optional(), end: z.number().finite().min(0).max(3000).optional() }).strict()).max(100),
   actionPoints: z.array(z.object({id,memberId:id,at:z.number().finite().min(0).max(3000)}).strict()).max(100).default([]),
   moments: z.array(z.object({id,nodeId:id.optional(),pointId:id.optional(),value,side:z.enum(['left','center','right']).default('right')}).strict().refine(m=>(m.nodeId!==undefined)!==(m.pointId!==undefined),'必须且只能连接一个作用点或节点')).max(100).default([]),
@@ -30,6 +30,8 @@ export type Solution = {
   extrema: { moment: Sample; shear: Sample; displacement: Sample };
   equilibrium: { force: number; horizontal?:number; moment: number };
   diagnostics: { meshNodes: number; elements: number; scaledCondition: number };
+  calculation?: {origin:number[];dofs:number;constrainedDofs:number;freeDofs:number;terms:{id:string;kind:string;x:number;y:number;fx:number;fy:number;couple:number;moment:number}[]};
+  nodalDisplacements?:{nodeId:string;ux:number;uy:number;rotation:number}[];
   notes: string[];
 };
 
@@ -57,6 +59,11 @@ export function example(which: ExampleKind): BeamModel {
   };
 }
 
+export function resolvePointLoad(model:BeamModel,load:BeamModel['pointLoads'][number]){
+  const point=model.actionPoints.find(p=>p.id===load.pointId);
+  return {...load,memberId:point?.memberId??load.memberId??'',at:point?.at??load.at??0};
+}
+
 export function validateModel(model: BeamModel): string[] {
   const parsed = modelSchema.safeParse(model);
   if (!parsed.success) return parsed.error.issues.map(e => `${e.path.join('.')}：参数格式或范围不合法`);
@@ -78,8 +85,10 @@ export function validateModel(model: BeamModel): string[] {
   const supported = new Set(model.supports.filter(s => nodes.has(s.nodeId)).map(s => s.nodeId));
   if (supported.size !== model.supports.length) errors.push('同一节点只能放置一个支座。');
   if (!model.supports.some(s => s.kind === 'fixed' && nodes.has(s.nodeId)) && (supported.size < 2 || !model.supports.some(s=>s.kind==='pin'))) errors.push('约束不足：需要固定支座，或铰支座配合其他支座；滚动支座只约束全局 Y。');
-  for (const p of [...model.pointLoads, ...model.distributedLoads, ...model.actionPoints]) if (!members.has(p.memberId)) errors.push('荷载没有连接有效杆件。');
-  for (const p of [...model.pointLoads, ...model.actionPoints]) {
+  if(model.pointLoads.some(p=>p.pointId!==undefined&&!points.has(p.pointId)))errors.push('集中力没有连接有效作用点。');
+  const forces=model.pointLoads.map(p=>resolvePointLoad(model,p));
+  for (const p of [...forces, ...model.distributedLoads, ...model.actionPoints]) if (!members.has(p.memberId)) errors.push('荷载没有连接有效杆件。');
+  for (const p of [...forces, ...model.actionPoints]) {
     const m = members.get(p.memberId);
     if (m && nodes.has(m.start) && nodes.has(m.end) && p.at > distance(nodes.get(m.end)!,nodes.get(m.start)!) + 1e-8) errors.push(`作用位置 ${p.id} 超出杆件长度。`);
   }
@@ -101,7 +110,7 @@ export function parseModel(text: string): BeamModel {
   const ids = [...model.nodes, ...model.members, ...model.supports, ...model.pointLoads, ...model.distributedLoads, ...model.moments, ...model.actionPoints].map(o => o.id);
   const nodes = new Set(model.nodes.map(n => n.id));
   const members = new Set(model.members.map(m => m.id));
-  if (new Set(ids).size !== ids.length || model.members.some(m => !nodes.has(m.start) || !nodes.has(m.end)) || model.supports.some(s => !nodes.has(s.nodeId)) || model.moments.some(m=>m.nodeId!==undefined?!nodes.has(m.nodeId):!model.actionPoints.some(p=>p.id===m.pointId)) || [...model.pointLoads, ...model.distributedLoads, ...model.actionPoints].some(l => !members.has(l.memberId))) throw new Error('模型包含重复 ID 或无效对象引用，未载入。');
+  if (new Set(ids).size !== ids.length || model.members.some(m => !nodes.has(m.start) || !nodes.has(m.end)) || model.supports.some(s => !nodes.has(s.nodeId)) || model.moments.some(m=>m.nodeId!==undefined?!nodes.has(m.nodeId):!model.actionPoints.some(p=>p.id===m.pointId)) || model.pointLoads.some(p=>p.pointId!==undefined?!model.actionPoints.some(a=>a.id===p.pointId):!members.has(p.memberId!)) || [...model.distributedLoads, ...model.actionPoints].some(l => !members.has(l.memberId))) throw new Error('模型包含重复 ID 或无效对象引用，未载入。');
   return model;
 }
 
@@ -112,10 +121,11 @@ export function removeSelection(model: BeamModel, selection: Selection): BeamMod
   copy.nodes = copy.nodes.filter(n => !(selection.type === 'nodes' && n.id === selection.id));
   copy.members = copy.members.filter(m => !deletedMembers.has(m.id));
   copy.supports = copy.supports.filter(s => !(selection.type === 'supports' && s.id === selection.id) && !(selection.type === 'nodes' && s.nodeId === selection.id));
-  copy.pointLoads = copy.pointLoads.filter(p => !(selection.type === 'pointLoads' && p.id === selection.id) && !deletedMembers.has(p.memberId));
-  copy.distributedLoads = copy.distributedLoads.filter(p => !(selection.type === 'distributedLoads' && p.id === selection.id) && !deletedMembers.has(p.memberId));
+  copy.pointLoads = copy.pointLoads.filter(p => !(selection.type === 'pointLoads' && p.id === selection.id) && !deletedMembers.has(p.memberId??''));
+  copy.distributedLoads = copy.distributedLoads.filter(p => !(selection.type === 'distributedLoads' && p.id === selection.id) && !deletedMembers.has(p.memberId??''));
   const deletedPoints=new Set(copy.actionPoints.filter(p=>deletedMembers.has(p.memberId)||(selection.type==='actionPoints'&&p.id===selection.id)).map(p=>p.id));
   copy.actionPoints=copy.actionPoints.filter(p=>!deletedPoints.has(p.id));
+  copy.pointLoads=copy.pointLoads.filter(p=>!deletedPoints.has(p.pointId??''));
   copy.moments = copy.moments.filter(m => !(selection.type==='moments' && m.id===selection.id) && !(selection.type==='nodes' && m.nodeId===selection.id) && !deletedPoints.has(m.pointId??''));
   return copy;
 }

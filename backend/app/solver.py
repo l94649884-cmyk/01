@@ -32,6 +32,12 @@ def _cross(a, b):
     return float(a[0]*b[1] - a[1]*b[0])
 
 
+def resolved_forces(model):
+    points = {p.id: p for p in model.actionPoints}
+    return [load.model_copy(update={"memberId": points[load.pointId].memberId, "at": points[load.pointId].at})
+            if load.pointId in points else load for load in model.pointLoads]
+
+
 def validate_model(model: BeamModel) -> list[str]:
     errors = []
     groups = (model.nodes, model.members, model.supports, model.pointLoads, model.distributedLoads, model.moments, model.actionPoints)
@@ -115,14 +121,17 @@ def validate_model(model: BeamModel) -> list[str]:
             restraints.append([0, 0, 1])
     if not restraints or np.linalg.matrix_rank(np.array(restraints), tol=1e-10) < 3:
         errors.append("约束不足：支座未限制平面整体平移或转动；滚动支座仅约束全局竖向位移。")
-    for load in model.pointLoads + model.distributedLoads + model.actionPoints:
+    if any(p.pointId is not None and p.pointId not in points for p in model.pointLoads):
+        errors.append("集中力引用了不存在的作用点。")
+    forces = resolved_forces(model)
+    for load in forces + model.distributedLoads + model.actionPoints:
         if load.memberId not in members:
             errors.append(f"荷载 {load.id} 未连接到有效杆件。")
-    for load in model.pointLoads + model.actionPoints:
+    for load in forces + model.actionPoints:
         m = members.get(load.memberId)
         if m and m.start in nodes and m.end in nodes:
             length = float(np.linalg.norm(_xy(nodes[m.end])-_xy(nodes[m.start])))
-            if load.at > length+TOL:
+            if load.at is not None and load.at > length+TOL:
                 errors.append(f"作用位置 {load.id} 超出杆长 {length:g} m。")
     for load in model.distributedLoads:
         m = members.get(load.memberId)
@@ -164,6 +173,7 @@ def solve_beam(model: BeamModel) -> dict:
     node_index = {n.id: i for i, n in enumerate(model.nodes)}
     elements, point_forces, point_moments = [], [], []
     action_points = {p.id: p for p in model.actionPoints}
+    resolved_loads = resolved_forces(model)
     ordered_members = sorted(model.members, key=lambda m: min(nodes[m.start].x, nodes[m.end].x)) if horizontal else model.members
     for member in ordered_members:
         reverse = horizontal and nodes[member.end].x < nodes[member.start].x
@@ -174,7 +184,7 @@ def solve_beam(model: BeamModel) -> dict:
         rotation = np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
         transform = np.zeros((6, 6))
         transform[:3, :3] = transform[3:, 3:] = rotation
-        loads = [p for p in model.pointLoads if p.memberId == member.id]
+        loads = [p for p in resolved_loads if p.memberId == member.id]
         positions = {p.id: _station(length-p.at if reverse else p.at, length) for p in loads}
         moments = [m for m in model.moments if m.pointId is not None and action_points[m.pointId].memberId == member.id]
         moment_positions = {m.id: _station(length-action_points[m.pointId].at if reverse else action_points[m.pointId].at, length) for m in moments}
@@ -324,9 +334,37 @@ def solve_beam(model: BeamModel) -> dict:
              "节点间杆件刚接；铰支座约束全局 x/y 位移，滚动支座仅约束全局 y 位移；支座不代表杆件内铰。",
              "荷载正值沿所选全局坐标轴的负方向；均布荷载按实际杆长计。集中弯矩正值逆时针，中心或左右仅为符号显示位置，均作用于所连接的点。N 拉为正；V、M 与局部横向位移 w 按杆件局部坐标定义。"]
     notes.append("水平直梁按全局 x 正方向绘图。" if horizontal else "各杆件按起点→终点的距离分别绘图；局部横向为杆轴逆时针旋转 90°，w 不一定等于全局竖向位移 uy。")
+    terms = []
+    def add_term(id, kind, position, fx=0.0, fy=0.0, couple=0.0):
+        terms.append(dict(id=id, kind=kind, x=float(position[0]), y=float(position[1]),
+                          fx=float(fx), fy=float(fy), couple=float(couple),
+                          moment=_cross(position-origin, np.array([fx, fy]))+couple))
+    def position_at(member_id, station):
+        member = next(m for m in model.members if m.id == member_id)
+        first, last = _xy(nodes[member.start]), _xy(nodes[member.end])
+        return first+(last-first)*station/np.linalg.norm(last-first)
+    for reaction in reactions:
+        add_term(reaction["supportId"], "reaction", np.array([reaction["x"], reaction["y"]]),
+                 reaction["horizontal"], reaction["vertical"], reaction["moment"])
+    for load in resolved_loads:
+        add_term(load.id, "point", position_at(load.memberId, load.at),
+                 -load.value if load.direction == "x" else 0, -load.value if load.direction == "y" else 0)
+    for load in model.distributedLoads:
+        member = next(m for m in model.members if m.id == load.memberId)
+        length = float(np.linalg.norm(_xy(nodes[member.end])-_xy(nodes[member.start])))
+        end = length if load.end is None else load.end
+        force = -load.value*(end-load.start)
+        add_term(load.id, "udl", position_at(load.memberId, (load.start+end)/2),
+                 force if load.direction == "x" else 0, force if load.direction == "y" else 0)
+    for moment in model.moments:
+        point = action_points.get(moment.pointId)
+        position = position_at(point.memberId, point.at) if point else _xy(nodes[moment.nodeId])
+        add_term(moment.id, "moment", position, couple=moment.value)
     return {"axis": axis, "reactions": reactions, "samples": samples, "segments": segments,
             "extrema": {key: max(samples, key=lambda p: abs(p[key])) for key in ("moment", "shear", "axial", "displacement", "ux", "uy")},
             "equilibrium": {"horizontal": float(total_x), "force": float(total_y), "moment": float(total_moment)},
             "diagnostics": {"meshNodes": len(mesh), "elements": len(elements), "scaledCondition": condition},
+            "calculation": {"origin": origin.tolist(), "terms": terms, "dofs": size,
+                            "constrainedDofs": len(constrained), "freeDofs": len(free)},
             "nodalDisplacements": [{"nodeId": n.id, "ux": float(u[3*i]), "uy": float(u[3*i+1]), "rotation": float(u[3*i+2])} for i, n in enumerate(model.nodes)],
             "notes": notes}

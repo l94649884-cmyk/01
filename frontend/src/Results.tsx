@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Activity, ArrowUpRight, Check, MoveVertical } from 'lucide-react';
-import { evaluate, fmt } from './model';
+import { evaluate, fmt, resolvePointLoad } from './model';
 import type { BeamModel, Sample, Selection, Solution } from './model';
 import type { ThemePalette } from './themes';
 import StructureDiagram from './StructureDiagram';
+import DeformedShape from './DeformedShape';
+import CalculationExplanation from './CalculationExplanation';
+import type {SectionLocation} from './CalculationExplanation';
 
 type Mode = 'moment' | 'shear' | 'axial' | 'displacement' | 'ux' | 'uy';
 const value = (sample:Sample,mode:Mode) => sample[mode]??0;
@@ -11,7 +14,9 @@ export default function Results({solution,status,errors,model,selection,palette}
   const [mode,setMode]=useState<Mode>('moment');
   const [hover,setHover]=useState<number|null>(null);
   const [chosenMember,setChosenMember]=useState('');
-  const [view,setView]=useState<'structure'|'curve'>('curve');
+  const [view,setView]=useState<'structure'|'curve'|'deformation'>('curve');
+  const [inspection,setInspection]=useState<SectionLocation|null>(null);
+  useEffect(()=>setInspection(null),[solution]);
   const previousAxis=useRef<string | undefined>(undefined);
   useEffect(()=>{if(solution&&solution.axis!==previousAxis.current){previousAxis.current=solution.axis;setView(solution.axis==='member-s'?'structure':'curve');}},[solution?.axis]);
   const settings={
@@ -27,7 +32,7 @@ export default function Results({solution,status,errors,model,selection,palette}
   const segments=(solution?.segments??[]).filter(s=>!local||s.memberId===memberId);
   useEffect(()=>{
     if(selection?.type==='members')setChosenMember(selection.id);
-    else if(selection?.type==='pointLoads')setChosenMember(model.pointLoads.find(l=>l.id===selection.id)?.memberId??'');
+    else if(selection?.type==='pointLoads')setChosenMember((()=>{const load=model.pointLoads.find(l=>l.id===selection.id);return load?resolvePointLoad(model,load).memberId:'';})());
     else if(selection?.type==='distributedLoads')setChosenMember(model.distributedLoads.find(l=>l.id===selection.id)?.memberId??'');
     setHover(null);
   },[selection?.id]);
@@ -53,11 +58,11 @@ export default function Results({solution,status,errors,model,selection,palette}
       <div className="metric"><span>最大绝对剪力<MoveVertical size={14}/></span><strong data-testid="max-shear">{solution?fmt(Math.abs(solution.extrema.shear.shear)):'—'}<small>kN</small></strong><p>{solution?location(solution.extrema.shear):'集中力处显示剪力跃变'}</p></div>
       <div className="metric"><span>{local?'最大局部横向位移':'最大绝对挠度'}<Activity size={14}/></span><strong data-testid="max-displacement">{solution?fmt(Math.abs(solution.extrema.displacement.displacement)*1000):'—'}<small>mm</small></strong><p>{solution?`极值 · ${location(solution.extrema.displacement)}`:'考虑材料与截面刚度'}</p></div>
     </div>
-    {solution&&<div className="diagram-view-switch" role="group" aria-label="结果显示方式"><button aria-pressed={view==='structure'} onClick={()=>setView('structure')}>整体结构图</button><button aria-pressed={view==='curve'} onClick={()=>setView('curve')}>截面曲线</button><span>{view==='structure'?'梁、柱按真实方向同时显示':'沿杆件长度展开，便于精确读数'}</span></div>}
+    {solution&&<div className="diagram-view-switch" role="group" aria-label="结果显示方式"><button aria-pressed={view==='structure'} onClick={()=>setView('structure')}>整体结构图</button><button aria-pressed={view==='curve'} onClick={()=>setView('curve')}>截面曲线</button><button aria-pressed={view==='deformation'} onClick={()=>setView('deformation')}>变形图</button><span>{view==='deformation'?'真实位移 · 可调放大倍数':view==='structure'?'梁、柱按真实方向同时显示':'沿杆件长度展开，便于精确读数'}</span></div>}
     {local&&view==='curve'&&<div className="result-scope"><label>查看杆件 <select className="diagram-member-select" aria-label="查看杆件内力" value={memberId} onChange={e=>{setChosenMember(e.target.value);setHover(null);}}>{memberIds.map(id=>{const m=model.members.find(m=>m.id===id);return <option key={id} value={id}>{id.slice(0,8)} · {m?.start.slice(0,8)} → {m?.end.slice(0,8)}</option>;})}</select></label><span>横轴 s：沿本杆起点量取的实际距离</span></div>}
-    <div className="chart-head"><div className="segmented">{(Object.keys(settings) as Mode[]).map(key=><button key={key} className={mode===key?'active':''} onClick={()=>{setMode(key);setHover(null);}}>{settings[key].label}<em>{settings[key].symbol}</em></button>)}</div><span className="chart-unit">{cfg.symbol} / {cfg.unit}</span></div>
-    {solution&&view==='structure'?<StructureDiagram model={model} solution={solution} mode={mode} color={cfg.color} symbol={cfg.symbol} unit={cfg.unit} palette={palette}/>:solution?<div className="chart" data-testid="result-chart">
-      <svg viewBox="0 0 800 240" role="img" aria-label={`${cfg.label}，可悬停查看数值`} onMouseLeave={()=>setHover(null)} onMouseMove={e=>{const r=e.currentTarget.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*800;let x=x0+(px-left)/(right-left)*(x1-x0);const near=segments.flatMap(s=>[s.x0,s.x1]).find(v=>Math.abs(X(v)-px)<5);if(near!==undefined)x=near;setHover(x);}}>
+    {view!=='deformation'&&<div className="chart-head"><div className="segmented">{(Object.keys(settings) as Mode[]).map(key=><button key={key} className={mode===key?'active':''} onClick={()=>{setMode(key);setHover(null);}}>{settings[key].label}<em>{settings[key].symbol}</em></button>)}</div><span className="chart-unit">{cfg.symbol} / {cfg.unit}</span></div>}
+    {solution&&view==='deformation'?<DeformedShape model={model} solution={solution} palette={palette}/>:solution&&view==='structure'?<StructureDiagram onInspect={setInspection} model={model} solution={solution} mode={mode} color={cfg.color} symbol={cfg.symbol} unit={cfg.unit} palette={palette}/>:solution?<div className="chart" data-testid="result-chart">
+      <svg viewBox="0 0 800 240" role="img" aria-label={`${cfg.label}，可悬停查看数值`} onClick={e=>{const r=e.currentTarget.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*800;let x=Math.max(x0,Math.min(x1,x0+(px-left)/(right-left)*(x1-x0)));const near=segments.flatMap(s=>[s.x0,s.x1]).find(v=>Math.abs(X(v)-px)<5);if(near!==undefined)x=near;const seg=segments.find(s=>x>=s.x0-1e-8&&x<=s.x1+1e-8);if(seg)setInspection({memberId:seg.memberId,station:(seg.s0??seg.x0)+(x-seg.x0)/(seg.x1-seg.x0)*((seg.s1??seg.x1)-(seg.s0??seg.x0))});}} onMouseLeave={()=>setHover(null)} onMouseMove={e=>{const r=e.currentTarget.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*800;let x=x0+(px-left)/(right-left)*(x1-x0);const near=segments.flatMap(s=>[s.x0,s.x1]).find(v=>Math.abs(X(v)-px)<5);if(near!==undefined)x=near;setHover(x);}}>
         {[baseline-amplitude,baseline,baseline+amplitude].map((y,i)=><g key={y}><line x1={left} y1={y} x2={right} y2={y} stroke={i===1?palette.axis:palette.majorGrid} strokeDasharray={i===1?'':'4 5'}/><text x={left-11} y={y+4} textAnchor="end" fill={palette.muted} fontSize={15}>{fmt(i===0?maximum:i===1?0:-maximum,2)}</text></g>)}
         {Array.from({length:7},(_,i)=>x0+(x1-x0)*i/6).map(x=><g key={x}><line x1={X(x)} y1={baseline-amplitude} x2={X(x)} y2={baseline+amplitude} stroke={palette.grid}/><text x={X(x)} y={224} textAnchor="middle" fill={palette.muted} fontSize={15}>{fmt(x,2)}</text></g>)}
         {paths.map((p,i)=><g key={i}><path d={p.fill} fill={cfg.color} opacity=".12"/><path d={p.line} fill="none" stroke={cfg.color} strokeWidth="2.5"/></g>)}
@@ -67,5 +72,6 @@ export default function Results({solution,status,errors,model,selection,palette}
       </svg>
       <div className="chart-readout" data-testid="chart-readout">{hoverX!==null&&at.length?<>{local?'s':'x'} = {fmt(hoverX)} m <b>{cfg.symbol}{at.length>1?'⁻':''} = {fmt(value(at[0],mode)*factor)} {cfg.unit}</b>{at.length>1&&<b>{cfg.symbol}⁺ = {fmt(value(at[1],mode)*factor)} {cfg.unit}</b>}</>:<><span className="legend-line" style={{background:cfg.color}}/>{legend}</>}</div>
     </div>:<div className="chart-empty"><Activity size={26}/><strong>{status==='solving'?'正在组装并求解结构模型…':errors.length?'完善模型后，即可查看内力图':'点击「求解模型」开始分析'}</strong><p>{errors[0]??'结果来自本地 Python 求解器，当前没有可显示的计算结果。'}</p></div>}
+    {solution&&<CalculationExplanation model={model} solution={solution} selection={selection} location={inspection}/>}
   </section>;
 }

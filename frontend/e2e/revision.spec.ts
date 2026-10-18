@@ -117,6 +117,7 @@ test('all five themes change the visible palette, persist on reload, and preserv
 
 async function hoverChartAtMiddle(page: Page, label: string) {
   const chart = page.getByRole('img', { name: `${label}，可悬停查看数值` });
+  await chart.scrollIntoViewIfNeeded();
   const box = await chart.boundingBox();
   if (!box) throw new Error(`${label}未显示`);
   await page.mouse.move(box.x + box.width * (55 + (750 - 55) / 2) / 800, box.y + box.height / 2);

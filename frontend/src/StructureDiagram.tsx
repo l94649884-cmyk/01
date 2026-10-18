@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { evaluate, fmt } from './model';
 import type { BeamModel, Segment, Solution } from './model';
+import type {SectionLocation} from './CalculationExplanation';
 import type { ThemePalette } from './themes';
 
 export type DiagramMode='moment'|'shear'|'axial'|'displacement'|'ux'|'uy';
@@ -13,7 +14,7 @@ export function segmentEndpoints(model:BeamModel,segment:Segment){
   return [at(segment.s0??0),at(segment.s1??length)];
 }
 
-export default function StructureDiagram({model,solution,mode,color,symbol,unit,palette}:{model:BeamModel;solution:Solution;mode:DiagramMode;color:string;symbol:string;unit:string;palette:ThemePalette}){
+export default function StructureDiagram({model,solution,mode,color,symbol,unit,palette,onInspect}:{onInspect?:(s:SectionLocation)=>void;model:BeamModel;solution:Solution;mode:DiagramMode;color:string;symbol:string;unit:string;palette:ThemePalette}){
   const [hover,setHover]=useState<{index:number;t:number}|null>(null);
   const factor=['displacement','ux','uy'].includes(mode)?1000:1;
   const maximum=Math.max(...solution.samples.map(p=>Math.abs(p[mode]??0)),1e-12);
@@ -44,9 +45,10 @@ export default function StructureDiagram({model,solution,mode,color,symbol,unit,
           const svg=e.currentTarget.ownerSVGElement!,matrix=svg.getScreenCTM();if(!matrix)return;
           const mouse=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());
           const dx=d.end.x-d.start.x,dy=d.end.y-d.start.y;
-          setHover({index,t:Math.max(0,Math.min(1,((mouse.x-d.start.x)*dx+(mouse.y-d.start.y)*dy)/(dx*dx+dy*dy)))});
+          const t=Math.max(0,Math.min(1,((mouse.x-d.start.x)*dx+(mouse.y-d.start.y)*dy)/(dx*dx+dy*dy)));
+          setHover({index,t});return t;
         }
-        return <g key={index} data-member-id={d.segment.memberId} onMouseMove={inspect}>
+        return <g key={index} data-member-id={d.segment.memberId} onMouseMove={inspect} onClick={e=>{const t=inspect(e);if(t!==undefined)onInspect?.({memberId:d.segment.memberId,station:(d.segment.s0??0)+t*((d.segment.s1??0)-(d.segment.s0??0))});}}>
           <path d={`M${d.start.x},${d.start.y} L${d.points[0].x},${d.points[0].y} ${d.path.replace(/^M/,'L')} L${d.end.x},${d.end.y} Z`} fill={color} fillOpacity={.14}/>
           <line data-testid="structure-axis" x1={d.start.x} y1={d.start.y} x2={d.end.x} y2={d.end.y} stroke={palette.ink} strokeWidth={3}/>
           <path data-testid="structure-force" d={d.path} fill="none" stroke={color} strokeWidth={2.3}/>

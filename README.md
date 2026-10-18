@@ -1,6 +1,10 @@
-# 力构 Lab 0.6
+# 力构 Lab 0.7
 
 可运行的中文可视化二维梁 / 刚架建模 MVP。React + TypeScript + Vite + React Konva + Tailwind CSS 前端，Python + FastAPI + NumPy / SciPy 真实求解后端。计算不依赖外部 API 或 AI；断开计算服务时明确报错，不展示虚构结果。
+
+0.7 完成四项升级：集中力与弯矩共用作用点；CAD 式框选、多选、复制、整体移动和长度 / 角度建杆；按真实 ux / uy 绘制可放大的变形轮廓；点击支座或截面查看平衡贡献、内力公式及两侧截面值。
+
+旧版完整保存于 GitHub 私有仓库 `l94649884-cmyk/01`，`01` 标签指向提交 `ff59c02`。新功能位于 `feature/workbench-upgrade` 分支。
 
 0.6 新增独立“作用点”：在杆件任意位置放置菱形标记，无需建立连接节点或拆杆。集中弯矩可吸附到作用点中心、左侧或右侧；三种显示位置均作用于同一点。作用点可拖动、精确编辑位置、独立删除，并支持撤销、历史和 JSON 保存。原有节点弯矩继续兼容。
 
@@ -10,7 +14,7 @@
 
 0.3 已实现局部均布荷载区间编辑与端点拖动、沿结构几何方向显示的整体内力图，并重新设计工作台和带预览的主题面板。宽屏（≥1600 px）并排显示建模与结果；窄屏保留上下布局。原有二维刚架计算、独立支座删除与五套主题继续可用。
 
-![作用点集中弯矩工作台](docs/action-point-moment.png)
+![统一作用点工作台](docs/shared-point.png)
 
 ## 快速启动（Windows）
 
@@ -88,12 +92,22 @@ macOS / Linux：`python3 -m venv .venv`，使用 `.venv/bin/python -m pip instal
 
 可载入 [简支梁任意位置弯矩](examples/09-interior-point-moment.json)、[悬臂梁杆内弯矩](examples/10-interior-cantilever-moment.json)。旧 [节点端弯矩](examples/07-cantilever-moment.json)、[节点跨中弯矩](examples/08-simply-supported-midspan-moment.json) 继续可用。界面见 [作用点集中弯矩](docs/action-point-moment.png)。
 
-JSON v1 兼容新增字段：`actionPoints: [{id: "A1", memberId: "B1", at: 1.73}]`；对应弯矩 `moments: [{id: "M1", pointId: "A1", value: 10, side: "center"}]`。`side` 可为 `center` / `left` / `right`；旧 `nodeId` 仍支持，但同一弯矩只能指定 `nodeId` 或 `pointId` 中一个。旧文件缺省 `actionPoints` 与 `moments` 均为空数组。
+JSON v1 兼容新增字段：`actionPoints: [{id: "A1", memberId: "B1", at: 1.73}]`；对应弯矩 `moments: [{id: "M1", pointId: "A1", value: 10, side: "center"}]`。`side` 可为 `center` / `left` / `right`；旧 `nodeId` 仍支持，但同一弯矩只能指定 `nodeId` 或 `pointId` 中一个。旧文件缺省 `actionPoints` 与 `moments` 均为空数组。0.7 集中力还可写为 `pointLoads: [{id: "P1", pointId: "A1", value: 10, direction: "y"}]`；绑定作用点时省略 `memberId` 与 `at`，否则保持旧版杆件位置格式。
+
+## 0.7 四项功能操作
+
+- **统一作用点**：将集中力放到已有菱形作用点中心，会自动建立引用；同一点可同时承受全局 X / Y 集中力与集中弯矩。集中力属性的“集中力作用点”也可绑定 / 切换作用点，或改回独立杆件位置。点移动后全部荷载跟随；删点同时删除其集中力和弯矩，支持撤销。可载入 [共用作用点算例](examples/11-shared-point-loads.json)，跨中竖向 10 kN、水平 4 kN 与 +6 kN·m 对应竖向反力 6 / 4 kN，水平反力 4 kN，跨中弯矩 18 / 12 kN·m。
+- **CAD 编辑**：选择工具下，在空白处拖动框选；Shift 点击对象增减选项，对象列表也支持 Shift 多选。输入 ΔX / ΔY 后“整体移动”或“复制所选”，一次操作对应一次撤销。拖动已多选的节点或杆件也会整体移动。选择杆件复制时，端点、支座、作用点和荷载一起复制并重新建立引用；复制单个荷载时仍作用于原目标。默认偏移向上 1 m，可修改。不能让节点重合、杆件重叠 / 无节点相交；复制出独立结构后需连接成整体才能求解。单独支座、弯矩、绑定的集中力通过其附着目标移动，不能自由平移。
+- **精确建杆**：点击画布上方“长度 / 角度建杆”，选择已有起点，输入长度与角度。角度从全局 X 正方向逆时针量取：0°向右，90°向上。终点与已有节点重合时直接连接该节点，错误几何明确拒绝。
+- **变形图**：分析结果中选择“变形图”，实线按求解得到的全局 ux / uy 位移绘制，虚线为原始结构。支持自动放大、输入 0–1,000,000 倍及关闭原始叠加，悬停读取真实 mm 位移。放大仅影响显示；变形图根据完整位移向量绘制，包含轴向与弯曲变形，不是挠度标量图。
+- **计算解释**：展开“计算过程与截面解释”，查看 K·u=F 求解方式、自由度、全局平衡方程及各荷载 / 支座的贡献。点击支座高亮其反力贡献；点击曲线或整体内力图的截面固定位置，也可输入杆件距离 s。显示 N / V / M 的代入计算，集中力和弯矩突变处保留两侧值。超静定反力由刚度法求得，平衡方程用于独立复核。
+
+截图：[统一作用点](docs/shared-point.png)、[变形图](docs/deformation.png)、[计算解释](docs/calculation-explanation.png)。
 
 ## 已实现
 
 - 中文桌面工作台（建议宽度 ≥ 1020 px）、Konva 建模画布、缩放 / 适应模型、构件库、对象列表、参数编辑。
-- 节点、任意方向直杆、铰支座 / 滚动支座 / 固定支座、杆上集中力、可设置作用区间的均布荷载；荷载可沿全局 X / Y 方向，有效目标吸附及无效放置反馈。
+- 框选、Shift 多选、整体移动 / 复制、长度 / 角度精确建杆；节点、任意方向直杆、铰支座 / 滚动支座 / 固定支座、杆上集中力、可设置作用区间的均布荷载；荷载可沿全局 X / Y 方向，有效目标吸附及无效放置反馈。
 - 撤销 / 重做、支座独立删除、节点级联删除、JSON v1 保存载入、本地草稿恢复；旧文件缺省 A=100 cm²、荷载方向 Y。
 - **二维 Euler–Bernoulli 梁 / 刚架**线弹性静力分析，每节点水平位移、竖向位移与转角三个自由度，杆件节点刚接。支持斜杆、竖杆、分支、闭合结构、连续梁、悬臂 / 伸臂、变刚度和正负荷载叠加。
 - 水平 / 竖向反力、固定支座力矩、轴力 / 剪力 / 弯矩、局部横向位移与全局位移、交互截面读数、平衡残差；集中力位置保留内力跃变。
@@ -127,7 +141,7 @@ JSON v1 兼容新增字段：`actionPoints: [{id: "A1", memberId: "B1", at: 1.73
 
 ## 自动化验证
 
-本轮实际通过：后端 98 项、前端单元 58 项、浏览器 46 项，共 **202 项**；TypeScript 和生产构建成功。
+本轮实际通过：后端 104 项、前端单元 65 项、浏览器 52 项，共 **221 项**；TypeScript 和生产构建成功。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Test.ps1
@@ -155,7 +169,7 @@ Playwright 会启动测试所需服务，或复用已有的本机 8000 / 5173 �
 | 6 m 简支梁，全跨 2 kN/m | 6、6 | 0 | 跨中 +9 | 6 | 2.008929 |
 | 3 m 悬臂梁，端部 10 kN | 10 | +30 | 固定端 −30 | 10 | 5.357143 |
 
-其余测试覆盖：四象限斜杆、竖向构件、斜杆均布荷载、L / T 形刚架、闭合刚架、内力跃变、机构与拓扑错误，以及原有梁算例、API、JSON、撤销重做与真实浏览器交互。详细实测记录见 [VALIDATION.md](docs/VALIDATION.md)，十组算例求解结果见 [benchmark-results.json](docs/benchmark-results.json)。
+其余测试覆盖：四象限斜杆、竖向构件、斜杆均布荷载、L / T 形刚架、闭合刚架、内力跃变、机构与拓扑错误，以及原有梁算例、API、JSON、撤销重做与真实浏览器交互。详细实测记录见 [VALIDATION.md](docs/VALIDATION.md)，十一组算例求解结果见 [benchmark-results.json](docs/benchmark-results.json)。
 
 新增可载入示例：[竖向悬臂柱](examples/04-vertical-column.json)、[斜向悬臂梁](examples/05-inclined-cantilever.json)、[L 形刚架](examples/06-l-frame.json)。主题截图见 [极夜霓虹](docs/themes/midnight.png)、[星云紫](docs/themes/aurora.png)、[深海蓝图](docs/themes/blueprint.png)、[琥珀工坊](docs/themes/amber.png)、[原野白](docs/themes/botanical.png)。
 
@@ -167,7 +181,7 @@ backend/tests/           解析算例、错误输入和 API 测试
 frontend/src/            建模画布、状态、属性面板、结果图
 frontend/e2e/            Playwright 浏览器测试
 frontend/dist/           可直接由后端提供的生产构建
-examples/                十组可载入 JSON 算例
+examples/                十一组可载入 JSON 算例
 docs/                    实测记录与界面截图
 Setup.ps1 / Start.ps1    Windows 安装 / 启动
 Test.ps1                完整测试入口
@@ -177,7 +191,7 @@ Test.ps1                完整测试入口
 
 均布荷载 JSON 新增可选 `start`、`end`（m），沿该杆声明的起点→终点量取。省略时为整杆（`start=0`，`end` 取当前杆长）。要求 `0 ≤ start < end ≤ 杆长`，越界会停止求解并隐藏旧结果。旧 JSON 可继续载入。局部均布荷载会在边界创建内部计算节点，重叠荷载在各子区间叠加，反力和位移均重新计算。
 
-整体图保留实际杆件位置和方向；颜色填充表达所选数值，幅值相对结构放大，并非实际变形几何。弯矩画在对应受拉侧；其他量按局部横向正方向展开。位移模式显示标量 ux / uy / w 的分布，不是整体变形动画。选择“截面曲线”读取一维精确数值。
+整体图保留实际杆件位置和方向；颜色填充表达所选数值，幅值相对结构放大，并非实际变形几何。弯矩画在对应受拉侧；其他量按局部横向正方向展开。内力图中的位移模式显示标量 ux / uy / w 的分布；单独“变形图”按完整位移向量显示变形轮廓。选择“截面曲线”读取一维精确数值。
 
 新界面截图：[主题预览](docs/theme-picker.png)、[整体刚架弯矩图](docs/frame-diagram-dark.png)、[横向局部均布荷载](docs/partial-udl.png)。
 
