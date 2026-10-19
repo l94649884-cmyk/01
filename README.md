@@ -1,10 +1,12 @@
 # 力构 Lab 0.7
 
+[源码仓库](https://github.com/l94649884-cmyk/01) · [MIT License](LICENSE) · [参与贡献](CONTRIBUTING.md)
+
 可运行的中文可视化二维梁 / 刚架建模 MVP。React + TypeScript + Vite + React Konva + Tailwind CSS 前端，Python + FastAPI + NumPy / SciPy 真实求解后端。计算不依赖外部 API 或 AI；断开计算服务时明确报错，不展示虚构结果。
 
 0.7 完成四项升级：集中力与弯矩共用作用点；CAD 式框选、多选、复制、整体移动和长度 / 角度建杆；按真实 ux / uy 绘制可放大的变形轮廓；点击支座或截面查看平衡贡献、内力公式及两侧截面值。
 
-旧版完整保存于 GitHub 私有仓库 `l94649884-cmyk/01`，`01` 标签指向提交 `ff59c02`。新功能位于 `feature/workbench-upgrade` 分支。
+最新版位于 `main` 分支。旧版完整保留在 `01` 标签，指向提交 `ff59c02`；可随时检出旧版对照。前端、后端、测试、示例和启动脚本均以 MIT 许可证开源。
 
 0.6 新增独立“作用点”：在杆件任意位置放置菱形标记，无需建立连接节点或拆杆。集中弯矩可吸附到作用点中心、左侧或右侧；三种显示位置均作用于同一点。作用点可拖动、精确编辑位置、独立删除，并支持撤销、历史和 JSON 保存。原有节点弯矩继续兼容。
 
@@ -21,12 +23,13 @@
 需要 Node.js 22.12+（建议 24 LTS）和 Python 3.12+（本机验证为 3.12）。首次安装：
 
 ```powershell
-cd <解压后的 ligou-lab 目录>
+git clone https://github.com/l94649884-cmyk/01.git ligou-lab
+cd ligou-lab
 powershell -ExecutionPolicy Bypass -File .\Setup.ps1
 powershell -ExecutionPolicy Bypass -File .\Start.ps1
 ```
 
-打开 **http://127.0.0.1:8000**。生产构建由 FastAPI 同源提供，只需一个服务。停止时在终端按 Ctrl+C。本次交付目录已安装依赖并构建，可直接运行 `Start.ps1`。ZIP 不包含虚拟环境与 node_modules，换机器或移动目录后请重新运行 Setup。
+打开 **http://127.0.0.1:8000**。生产构建由 FastAPI 同源提供，只需一个服务。停止时在终端按 Ctrl+C。首次克隆或下载源码 ZIP 后请运行 `Setup.ps1` 安装依赖并构建；之后可直接运行 `Start.ps1`。仓库不包含虚拟环境与 node_modules，换机器或移动目录后请重新运行 Setup。
 
 如 `python` 指向 Windows 应用商店占位程序，指定真实 Python：
 
