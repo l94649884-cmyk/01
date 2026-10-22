@@ -7,7 +7,7 @@ test('required benchmarks use the real API and interactive diagrams',async({page
   const consoleErrors:string[]=[];page.on('pageerror',e=>consoleErrors.push(e.message));
   await expect(page.getByTestId('max-shear')).toContainText('5');
   await page.getByRole('button',{name:'剪力图'}).click();
-  const chart=page.getByRole('img',{name:'剪力图，可悬停查看数值'});const box=await chart.boundingBox();
+  const chart=page.getByRole('img',{name:'剪力图，可悬停查看数值'});await chart.scrollIntoViewIfNeeded();const box=await chart.boundingBox();
   await page.mouse.move(box!.x+box!.width*402.5/800,box!.y+box!.height*.5);
   await expect(page.getByTestId('chart-readout')).toContainText('V⁻ = 5');
   await expect(page.getByTestId('chart-readout')).toContainText('V⁺ = -5');

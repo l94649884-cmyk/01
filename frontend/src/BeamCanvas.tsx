@@ -1,3 +1,5 @@
+import {createPolyline,orthogonalPoint} from './construction';
+import type {CoordinatePreview} from './Coordinates';
 import { useEffect, useRef, useState } from 'react';
 import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type Konva from 'konva';
@@ -15,6 +17,7 @@ import { inferLoadDirection, loadDirectionLabel } from './loadDirection';
 import type { ThemePalette } from './themes';
 
 type Props = {
+  onCoordinatePreview:(preview:CoordinatePreview)=>void;
   expanded: boolean; onToggleExpanded: () => void;
   model: BeamModel; selection: Selection; tool: Tool; solution: Solution | null;
   onChange: (model: BeamModel) => void; onSelect: (selection: Selection, additive?:boolean) => void;
@@ -31,7 +34,7 @@ function SupportSymbol({ kind, color, fill }: { kind: SupportKind; color: string
   return <Group><Line points={[0, 5, -14, 25, 14, 25, 0, 5]} closed fill={fill} stroke={color} strokeWidth={1.8}/>{kind === 'roller' && <><Circle x={-8} y={30} radius={3} stroke={color} strokeWidth={1.5}/><Circle x={8} y={30} radius={3} stroke={color} strokeWidth={1.5}/></>}<Line points={[-21, kind === 'roller' ? 37 : 30, 21, kind === 'roller' ? 37 : 30]} stroke={color} strokeWidth={1.5}/>{[-15, -5, 5, 15].map(x => <Line key={x} points={[x, kind === 'roller' ? 37 : 30, x-5, kind === 'roller' ? 43 : 36]} stroke={color} strokeWidth={1}/>)}</Group>;
 }
 
-export default function BeamCanvas({ expanded,onToggleExpanded,selections,onBatchSelect,model, selection, tool, solution, onChange, onSelect, onTool, onMessage, onClear, palette, viewRevision = 0 }: Props) {
+export default function BeamCanvas({ onCoordinatePreview,expanded,onToggleExpanded,selections,onBatchSelect,model, selection, tool, solution, onChange, onSelect, onTool, onMessage, onClear, palette, viewRevision = 0 }: Props) {
   const green=palette.accent,ink=palette.ink,orange=palette.load;
   const container = useRef<HTMLDivElement>(null);
   const stage = useRef<Konva.Stage>(null);
@@ -44,6 +47,7 @@ export default function BeamCanvas({ expanded,onToggleExpanded,selections,onBatc
   const [zoom, setZoom] = useState(1);
   const [center, setCenter] = useState<Point>({ x: 3, y: 0 });
   const [centerY,setCenterY]=useState(225);
+  const [draftPoints,setDraftPoints]=useState<Point[]>([]);
   const [startNode, setStartNode] = useState<string | null>(null);
   const [cursor, setCursor] = useState<Point | null>(null);
   const [hint, setHint] = useState<{ p: Point; valid: boolean; label: string } | null>(null);
@@ -114,7 +118,8 @@ export default function BeamCanvas({ expanded,onToggleExpanded,selections,onBatc
     const start=(event:MouseEvent)=>{if(event.button!==1)return;event.preventDefault();event.stopImmediatePropagation();panPoint.current={x:event.clientX,y:event.clientY};setPanActive(true);setViewNotice('');setHint(null);};
     content.addEventListener('mousedown',start,true);return()=>content.removeEventListener('mousedown',start,true);
   },[]);
-  useEffect(() => { setStartNode(null); setHint(null); }, [tool]);
+  useEffect(() => { setStartNode(null); setHint(null); setDraftPoints([]); }, [tool,viewRevision]);
+  useEffect(()=>{onCoordinatePreview(null);},[model,onCoordinatePreview]);
   useEffect(() => { if (startNode && !nodes.has(startNode)) setStartNode(null); }, [model, startNode]);
   // Reframe on document changes and measured layout changes, not on every model edit.
   const latestNodes = useRef(model.nodes); latestNodes.current = model.nodes;
@@ -128,10 +133,23 @@ export default function BeamCanvas({ expanded,onToggleExpanded,selections,onBatc
     const m={id:uid('B'),start:a.id,end:n.id,E:210,I:8000,A:100};
     onChange({...model,members:[...model.members,m]}); onSelect({type:'members',id:m.id}); setStartNode(null); onTool('select');
   }
+  function previewMove(ids:string[],dx:number,dy:number){
+    const selectedIds=new Set(ids);
+    if(selections.length>1){for(const item of selections){if(item.type==='nodes')selectedIds.add(item.id);if(item.type==='members'){const m=model.members.find(m=>m.id===item.id);if(m){selectedIds.add(m.start);selectedIds.add(m.end);}}}}
+    onCoordinatePreview(Object.fromEntries(model.nodes.filter(n=>selectedIds.has(n.id)).map(n=>[n.id,{x:n.x+dx,y:n.y+dy}])));
+  }
+  function polyPoint(p:Point):Point {
+    const near=nearestNode(p),candidate=near??{x:snap(p.x),y:snap(p.y)},last=draftPoints.at(-1);
+    return last?orthogonalPoint(last,candidate):candidate;
+  }
+  function finishPolyline(){
+    try{const result=createPolyline(model,draftPoints);onChange(result.model);onBatchSelect(result.selection,false);onTool('select');setDraftPoints([]);onMessage('连续折杆已创建：转角刚接，可整体移动、复制或一次撤销。');}catch(e){onMessage((e as Error).message);}
+  }
   function place(active: Tool, p: Point) {
     setViewNotice('');
     setHint(null);
     if (active==='select') { onSelect(null); return; }
+    if(active==='polyline'){const candidate=polyPoint(p);if(draftPoints.length&&Math.hypot(candidate.x-draftPoints.at(-1)!.x,candidate.y-draftPoints.at(-1)!.y)<1e-4){onMessage('请选择不同的端点。');return;}setDraftPoints([...draftPoints,candidate]);return;}
     if (active==='node') {
       const near=nearestNode(p);
       if (near) { onSelect({type:'nodes',id:near.id}); onMessage('已吸附到现有节点，未创建重合节点。'); return; }
@@ -194,6 +212,7 @@ export default function BeamCanvas({ expanded,onToggleExpanded,selections,onBatc
   return <div className="canvas-wrap" ref={container} data-testid="beam-canvas" data-panning={panActive||undefined} style={{background:palette.bg}} onDragOver={e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();preview((e.dataTransfer.types.includes('application/ligou-tool')?tool:'select'),toWorld({x:e.clientX-r.left,y:e.clientY-r.top}));}} onDrop={e=>{e.preventDefault();const active=e.dataTransfer.getData('application/ligou-tool') as Tool;const r=e.currentTarget.getBoundingClientRect(); if(active)place(active,toWorld({x:e.clientX-r.left,y:e.clientY-r.top}));}}>
     <div className="canvas-caption"><span className="live-dot"/>二维结构工作台<span className="caption-separator">/</span><span>单位 m · kN</span></div>
     <div className="canvas-controls"><button className="canvas-expand" title={expanded?"退出展开画布（Esc）":"展开画布"} aria-label={expanded?"退出展开画布":"展开画布"} aria-pressed={expanded} onClick={onToggleExpanded}>{expanded?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</button><button title="缩小视图" aria-label="缩小视图" onClick={()=>setZoom(z=>Math.max(.05,z/1.2))}><Minus size={15}/></button><span>{Math.round(zoom*100)}%</span><button title="放大视图" aria-label="放大视图" onClick={()=>setZoom(z=>Math.min(8,z*1.2))}><Plus size={15}/></button><button title="适应模型" aria-label="适应模型" onClick={fit}><Crosshair size={16}/></button><button className="canvas-clear" title="清空全部节点、杆件、支座和荷载（可撤销）" aria-label="清空模型" onClick={clearAll}><Trash2 size={14}/><span>清空</span></button></div>
+    {tool==='polyline'&&<div className="polyline-controls"><span>依次点击端点 · 自动正交 · {draftPoints.length} 点</span><button disabled={draftPoints.length<2} onClick={finishPolyline}>完成折杆</button><button disabled={!draftPoints.length} onClick={()=>setDraftPoints(p=>p.slice(0,-1))}>退回一点</button><button onClick={()=>onTool('select')}>取消绘制</button></div>}
     <Stage width={width} height={height} ref={stage} onMouseLeave={()=>{setSelectionBox(null);if(!panActive){setCursor(null);setHint(null);}}} onMouseDown={e=>{if(tool==='select'&&e.evt.button===0&&e.target===e.target.getStage()){const p=stage.current?.getPointerPosition();if(p){const w=toWorld(p);setSelectionBox({start:w,end:w});}}}} onMouseUp={e=>{if(!selectionBox)return;const moved=Math.hypot(selectionBox.end.x-selectionBox.start.x,selectionBox.end.y-selectionBox.start.y)*scale>4;if(moved){onBatchSelect(boxItems(model,selectionBox.start,selectionBox.end),e.evt.shiftKey);suppressClick.current=true;}setSelectionBox(null);}} onMouseMove={()=>{if(panActive)return;const p=stage.current?.getPointerPosition();if(p){const w=toWorld(p);if(selectionBox)setSelectionBox({...selectionBox,end:w});setCursor(w);preview(tool,w);}}} onClick={e=>{if(suppressClick.current){suppressClick.current=false;return;}if(('button' in e.evt&&e.evt.button!==0)||panActive)return;if(e.target===e.target.getStage()){const p=stage.current?.getPointerPosition();if(p)place(tool,toWorld(p));}}}>
       <Layer>
         {gridX.map(x=><Line key={`gx${x}`} points={[toScreen({x,y:0}).x,50,toScreen({x,y:0}).x,height-32]} stroke={Number.isInteger(x)?palette.majorGrid:palette.grid} strokeWidth={1} listening={false}/>)}
@@ -205,12 +224,12 @@ export default function BeamCanvas({ expanded,onToggleExpanded,selections,onBatc
           const a=nodes.get(m.start),b=nodes.get(m.end);if(!a||!b)return null;
           const pa=toScreen(a),pb=toScreen(b),isSelected=selected('members',m.id),len=Math.hypot(pb.x-pa.x,pb.y-pa.y),nx=-(pb.y-pa.y)/(len||1),ny=(pb.x-pa.x)/(len||1),offset=Math.abs(b.y-a.y)<1e-8?69:33;
           const da={x:pa.x+nx*offset,y:pa.y+ny*offset},db={x:pb.x+nx*offset,y:pb.y+ny*offset};
-          return <Group key={m.id} draggable={tool==='select'} onDragStart={()=>selectDrag('members',m.id)} onDragEnd={e=>{const dx=snap(e.target.x()/scale),dy=snap(-e.target.y()/scale);e.target.position({x:0,y:0});if(selections.length>1){moveBatch(dx,dy);return;}onChange({...model,nodes:model.nodes.map(n=>(n.id===a.id||n.id===b.id)?{...n,x:n.x+dx,y:n.y+dy}:n)});}} onClick={e=>clickObject('members',m.id,{x:(a.x+b.x)/2,y:(a.y+b.y)/2},e)}>
+          return <Group key={m.id} draggable={tool==='select'} onDragStart={()=>selectDrag('members',m.id)} onDragMove={e=>{const dx=e.target.x()/scale,dy=-e.target.y()/scale;previewMove([a.id,b.id],dx,dy);}} onDragEnd={e=>{onCoordinatePreview(null);const dx=snap(e.target.x()/scale),dy=snap(-e.target.y()/scale);e.target.position({x:0,y:0});if(selections.length>1){moveBatch(dx,dy);return;}onChange({...model,nodes:model.nodes.map(n=>(n.id===a.id||n.id===b.id)?{...n,x:n.x+dx,y:n.y+dy}:n)});}} onClick={e=>clickObject('members',m.id,{x:(a.x+b.x)/2,y:(a.y+b.y)/2},e)}>
             <Line points={[pa.x,pa.y,pb.x,pb.y]} stroke={isSelected?palette.selection:palette.majorGrid} strokeWidth={isSelected?17:12} lineCap="round" hitStrokeWidth={24}/>
             <Line points={[pa.x,pa.y,pb.x,pb.y]} stroke={isSelected?green:ink} strokeWidth={5} lineCap="round"/>
-            <Text x={(pa.x+pb.x)/2-42} y={(pa.y+pb.y)/2+16} text={m.id.startsWith('B-')?'梁段':m.id} fontSize={11} fill={palette.muted} listening={false} width={84} align="center"/>
-            <Group listening={false}><Line points={[da.x,da.y,db.x,db.y]} stroke={palette.axis} strokeWidth={1}/><Line points={[da.x-nx*5,da.y-ny*5,da.x+nx*5,da.y+ny*5]} stroke={palette.axis}/><Line points={[db.x-nx*5,db.y-ny*5,db.x+nx*5,db.y+ny*5]} stroke={palette.axis}/>
-            <Rect x={(da.x+db.x)/2-32} y={(da.y+db.y)/2-9} width={64} height={18} fill={palette.bg}/><Text x={(da.x+db.x)/2-32} y={(da.y+db.y)/2-7} text={`${fmt(Math.hypot(b.x-a.x,b.y-a.y))} m`} width={64} align="center" fontSize={12} fill={palette.muted}/></Group>
+            {(len>90||isSelected)&&<Text x={(pa.x+pb.x)/2-42} y={(pa.y+pb.y)/2+16} text={m.id.startsWith('B-')?'梁段':m.id} fontSize={11} fill={palette.muted} listening={false} width={84} align="center"/>}
+            {(len>90||isSelected)&&<Group listening={false}><Line points={[da.x,da.y,db.x,db.y]} stroke={palette.axis} strokeWidth={1}/><Line points={[da.x-nx*5,da.y-ny*5,da.x+nx*5,da.y+ny*5]} stroke={palette.axis}/><Line points={[db.x-nx*5,db.y-ny*5,db.x+nx*5,db.y+ny*5]} stroke={palette.axis}/>
+            <Rect x={(da.x+db.x)/2-32} y={(da.y+db.y)/2-9} width={64} height={18} fill={palette.bg}/><Text x={(da.x+db.x)/2-32} y={(da.y+db.y)/2-7} text={`${fmt(Math.hypot(b.x-a.x,b.y-a.y))} m`} width={64} align="center" fontSize={12} fill={palette.muted}/></Group>}
           </Group>;
         })}
         {model.distributedLoads.map((q,i)=>{
@@ -280,17 +299,18 @@ export default function BeamCanvas({ expanded,onToggleExpanded,selections,onBatc
         })}
         {model.nodes.map(n=>{
           const p=toScreen(n),isSelected=selected('nodes',n.id)||n.id===startNode;
-          return <Group key={n.id} x={p.x} y={p.y} draggable={tool==='select'} onClick={e=>clickObject('nodes',n.id,n,e)} onDragStart={()=>selectDrag('nodes',n.id)} onDragMove={e=>{const w=toWorld(e.target.position()),other=nearestNode(w,n.id);setHint({p:{x:model.nodes.find(o=>o.id!==n.id&&Math.abs(o.x-w.x)*scale<18)?.x??snap(w.x),y:model.nodes.find(o=>o.id!==n.id&&Math.abs(o.y-w.y)*scale<18)?.y??snap(w.y)},valid:!other,label:other?'节点不可重合':'网格 / 水平与竖向吸附'});}} onDragEnd={e=>{const w=toWorld(e.target.position()),x=model.nodes.find(o=>o.id!==n.id&&Math.abs(o.x-w.x)*scale<18)?.x??snap(w.x),y=model.nodes.find(o=>o.id!==n.id&&Math.abs(o.y-w.y)*scale<18)?.y??snap(w.y);e.target.position(p);setHint(null);if(selections.length>1){moveBatch(x-n.x,y-n.y);return;}if(model.nodes.some(o=>o.id!==n.id&&Math.hypot(o.x-x,o.y-y)<.001)){onMessage('节点不可重合，已恢复原位置。');return;}onChange({...model,nodes:model.nodes.map(o=>o.id===n.id?{...o,x,y}:o)});}}>
-            {isSelected&&<Circle radius={12} fill={palette.accentSoft} listening={false}/>}<Circle radius={5.5} fill={palette.supportFill} stroke={isSelected?green:ink} strokeWidth={2.2} hitStrokeWidth={5}/><Text x={-28} y={-26} width={56} align="center" text={n.id.startsWith('N-')?'节点':n.id} fontSize={11} fill={palette.text} listening={false}/>
+          return <Group key={n.id} x={p.x} y={p.y} draggable={tool==='select'} onClick={e=>clickObject('nodes',n.id,n,e)} onDragStart={()=>selectDrag('nodes',n.id)} onDragMove={e=>{const w=toWorld(e.target.position()),other=nearestNode(w,n.id);previewMove([n.id],w.x-n.x,w.y-n.y);setHint({p:{x:model.nodes.find(o=>o.id!==n.id&&Math.abs(o.x-w.x)*scale<18)?.x??snap(w.x),y:model.nodes.find(o=>o.id!==n.id&&Math.abs(o.y-w.y)*scale<18)?.y??snap(w.y)},valid:!other,label:other?'节点不可重合':'网格 / 水平与竖向吸附'});}} onDragEnd={e=>{onCoordinatePreview(null);const w=toWorld(e.target.position()),x=model.nodes.find(o=>o.id!==n.id&&Math.abs(o.x-w.x)*scale<18)?.x??snap(w.x),y=model.nodes.find(o=>o.id!==n.id&&Math.abs(o.y-w.y)*scale<18)?.y??snap(w.y);e.target.position(p);setHint(null);if(selections.length>1){moveBatch(x-n.x,y-n.y);return;}if(model.nodes.some(o=>o.id!==n.id&&Math.hypot(o.x-x,o.y-y)<.001)){onMessage('节点不可重合，已恢复原位置。');return;}onChange({...model,nodes:model.nodes.map(o=>o.id===n.id?{...o,x,y}:o)});}}>
+            {isSelected&&<Circle radius={12} fill={palette.accentSoft} listening={false}/>}<Circle radius={5.5} fill={palette.supportFill} stroke={isSelected?green:ink} strokeWidth={2.2} hitStrokeWidth={5}/>{(model.nodes.length<12||isSelected)&&<Text x={-28} y={-26} width={56} align="center" text={n.id.startsWith('N-')?'节点':n.id} fontSize={11} fill={palette.text} listening={false}/>}
           </Group>;
         })}
         {solution?.reactions.map(r=>{const n=nodes.get(r.nodeId);if(!n)return null;const p=toScreen(n);return <Text key={r.supportId} x={p.y>height-140?p.x+28:p.x-58} y={p.y>height-140?Math.min(height-70,p.y+5):p.y+92} width={116} align={p.y>height-140?"left":"center"} text={`${r.vertical>=0?'↑':'↓'} ${fmt(Math.abs(r.vertical))} kN${Math.abs(r.horizontal??0)>1e-8?`\n${(r.horizontal??0)>=0?'→':'←'} ${fmt(Math.abs(r.horizontal??0))} kN`:''}`} fontSize={12} fill={green} listening={false}/>;})}
+        {tool==='polyline'&&draftPoints.length>0&&<Line points={[...draftPoints,...(cursor?[polyPoint(cursor)]:[])].flatMap(p=>{const q=toScreen(p);return [q.x,q.y];})} stroke={green} strokeWidth={3} dash={[6,4]} listening={false}/>}
         {startNode&&nodes.has(startNode)&&cursor&&<Line points={[toScreen(nodes.get(startNode)!).x,toScreen(nodes.get(startNode)!).y,toScreen(cursor).x,toScreen(cursor).y]} stroke={green} dash={[6,4]} listening={false}/>}
         {selectionBox&&<Rect x={Math.min(toScreen(selectionBox.start).x,toScreen(selectionBox.end).x)} y={Math.min(toScreen(selectionBox.start).y,toScreen(selectionBox.end).y)} width={Math.abs(selectionBox.end.x-selectionBox.start.x)*scale} height={Math.abs(selectionBox.end.y-selectionBox.start.y)*scale} stroke={green} fill={green} opacity={.18} listening={false}/>}
         {hint&&<Group x={toScreen(hint.p).x} y={toScreen(hint.p).y} listening={false}><Circle radius={13} stroke={hint.valid?green:'#b65349'} strokeWidth={1.5} dash={[4,3]}/><Text x={19} y={-8} text={hint.label} fill={hint.valid?green:'#b65349'} fontSize={11}/></Group>}
       </Layer>
     </Stage>
-    {!model.nodes.length&&<div className="empty-canvas"><span>从一个节点开始。</span><p>将左侧的节点拖入画布，然后连接成梁。</p></div>}
+    {!model.nodes.length&&tool!=='polyline'&&<div className="empty-canvas"><span>从一个节点开始。</span><p>将左侧的节点拖入画布，然后连接成梁。</p></div>}
     <div className="canvas-foot"><span>{viewNotice||(startNode?'点击第二个节点完成杆件':tool==='select'?'拖动对象调整位置 · 点击对象编辑参数':'点击画布放置，或从构件库拖入')}</span><span>{cursor?`x ${fmt(cursor.x,2)} / y ${fmt(cursor.y,2)}`:'滚轮缩放 · 中键平移'}</span></div>
   </div>;
 }

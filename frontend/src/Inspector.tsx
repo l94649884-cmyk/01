@@ -1,3 +1,4 @@
+import Coordinates, {type CoordinatePreview} from './Coordinates';
 import { useEffect, useState } from 'react';
 import { Settings2, Trash2 } from 'lucide-react';
 import { fmt, removeSelection, resolvePointLoad } from './model';
@@ -12,7 +13,7 @@ function NumberField({label,value,unit,onChange,min,max}:{label:string;value:num
   return <label className="field"><span>{label}</span><div className={error?'input-unit invalid':'input-unit'}><input aria-label={label} type="number" step="any" value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/><span>{unit}</span></div>{error&&<small className="error-text">请输入有效数值{min!==undefined?`（≥ ${min}）`:''}。</small>}</label>;
 }
 
-export default function Inspector({model,selection,onChange,onSelect,solution}:{model:BeamModel;selection:Selection;onChange:(m:BeamModel)=>void;onSelect:(s:Selection)=>void;solution:Solution|null}){
+export default function Inspector({coordinatePreview,model,selection,onChange,onSelect,solution}:{coordinatePreview:CoordinatePreview;model:BeamModel;selection:Selection;onChange:(m:BeamModel)=>void;onSelect:(s:Selection)=>void;solution:Solution|null}){
   const object=selection?model[selection.type].find(o=>o.id===selection.id):undefined;
   function update(patch:Record<string,unknown>){if(!selection)return;onChange({...model,[selection.type]:model[selection.type].map(o=>o.id===selection.id?{...o,...patch}:o)} as BeamModel);}
   const node=selection?.type==='nodes'?model.nodes.find(n=>n.id===selection.id):undefined;
@@ -34,6 +35,7 @@ export default function Inspector({model,selection,onChange,onSelect,solution}:{
     <div className="aside-heading"><Settings2 size={16}/><h2>属性面板</h2></div>
     <div className="inspector-body" key={selection?.id??'empty'}>
       {object&&selection?<><div className="object-title"><span>{titles[selection.type]}</span><code>{object.id.length>8?object.id.slice(0,8):object.id}</code></div>
+        <Coordinates model={model} selection={selection} preview={coordinatePreview}/>
         {node&&<><NumberField label="X 坐标" value={node.x} unit="m" min={-1000} max={1000} onChange={x=>update({x})}/><NumberField label="Y 坐标" value={node.y} unit="m" min={-1000} max={1000} onChange={y=>update({y})}/><p className="field-help">相连杆件、支座与集中弯矩会随节点移动。水平、竖向与斜向节点均可连接。</p>
           {attached&&<div className="support-attachment"><strong>此节点的支座 · {supportTitles[attached.kind]}</strong><p>支座可独立编辑或删除，保留节点和杆件。</p><button onClick={()=>onSelect({type:'supports',id:attached.id})}>编辑此节点的支座</button><button className="delete-button" onClick={()=>onChange(removeSelection(model,{type:'supports',id:attached.id}))}><Trash2 size={13}/>删除此节点的支座</button></div>}
         </>}

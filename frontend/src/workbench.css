@@ -70,3 +70,14 @@ body { font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; font-size:14px
 .canvas-focused .canvas-wrap{flex:1;min-height:180px;height:0;}
 .canvas-focused .results-panel,.canvas-focused .object-drawer{display:none;}
 .canvas-focused .library,.canvas-focused .inspector{min-height:0;overflow:auto;}
+.construction-tools{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface);font-size:11px;flex-shrink:0}
+.construction-tools button,.polyline-controls button{padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--accent)}
+.construction-tools button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent)}
+.construction-tools small{color:var(--muted)}
+.construction-tools form{position:absolute;top:100%;left:12px;right:12px;z-index:10;display:flex;flex-wrap:wrap;gap:12px;padding:18px;border:1px solid var(--border);border-radius:10px;background:var(--surface);box-shadow:0 12px 35px #0002}
+.construction-tools form strong,.construction-tools form p{flex-basis:100%}.construction-tools p{font-size:11px;line-height:1.8;color:var(--secondary)}
+.construction-tools label{display:flex;flex-direction:column;gap:5px}.construction-tools input{width:100px;border:1px solid var(--border);border-radius:5px;padding:7px;background:var(--surface-alt);color:var(--text)}
+.polyline-controls{position:absolute;bottom:38px;left:12px;z-index:5;display:flex;align-items:center;gap:6px;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:11px}
+.coordinate-panel{padding:12px;margin:12px 0;background:var(--surface-alt);border:1px solid var(--border);border-radius:8px;font-size:11px;display:flex;flex-direction:column;gap:10px}
+.coordinate-panel label,.coordinate-panel div{display:flex;flex-direction:column;gap:5px}.coordinate-panel small{color:var(--muted);line-height:1.7}.coordinate-panel select{width:100%;padding:6px;border:1px solid var(--border);border-radius:5px;color:var(--text);background:var(--surface)}.coordinate-panel span{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+@media(min-width:1600px){.center-workspace{grid-template-rows:48px auto auto 384px min-content 1fr}.editing-tools{grid-column:1;grid-row:2}.construction-tools{grid-column:1;grid-row:3}.canvas-wrap{grid-row:4}.validation-bar{grid-row:5}.object-drawer{grid-row:6}.results-panel{grid-row:1/7}}

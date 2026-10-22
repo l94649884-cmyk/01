@@ -1,0 +1,46 @@
+import {test,expect} from '@playwright/test';
+const saved=(page:import('@playwright/test').Page)=>page.evaluate(()=>JSON.parse(localStorage.getItem('ligou-lab-workspace-v1')!).history.present);
+test.beforeEach(async({page})=>{await page.goto('/');await expect(page.getByTestId('max-moment')).toContainText('15');});
+test('continuous orthogonal drawing creates shared corners and is one undo operation',async({page})=>{
+ await page.getByRole('button',{name:'清空模型',exact:true}).click();
+ await page.getByRole('button',{name:'连续直角折杆',exact:true}).click();
+ const box=(await page.getByTestId('beam-canvas').boundingBox())!;
+ for(const [x,y] of [[200,250],[380,250],[380,100]])await page.mouse.click(box.x+x,box.y+y);
+ await page.getByRole('button',{name:'完成折杆',exact:true}).click();
+ await expect(page.locator('.model-count')).toContainText('3 节点 / 2 杆件');
+ const m=await saved(page);expect(m.members[0].end).toBe(m.members[1].start);
+ expect(m.nodes[0].y).toBe(m.nodes[1].y);expect(m.nodes[1].x).toBe(m.nodes[2].x);
+ await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.model-count')).toContainText('0 节点 / 0 杆件');
+});
+test('arch generator preserves previous model, solves and remains usable in expanded canvas',async({page})=>{
+ await page.getByRole('button',{name:'拱形建模',exact:true}).click();
+ await page.getByRole('button',{name:'生成拱形模型',exact:true}).click();
+ await expect(page.locator('.model-count')).toContainText('33 节点 / 32 杆件');
+ await expect(page.locator('.validation-bar')).toContainText('平衡校验通过');
+ expect((await saved(page)).name).toContain('32 段近似');
+ expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('ligou-lab-workspace-v1')!).archives.length)).toBeGreaterThan(0);
+ await page.getByRole('button',{name:'展开画布',exact:true}).click();
+ await expect(page.getByRole('button',{name:'拱形建模',exact:true})).toBeVisible();
+ await page.screenshot({path:'../work/arch-expanded.png'});
+});
+test('member endpoints and node coordinates update during drag before committing and support relative references',async({page})=>{
+ const box=(await page.getByTestId('beam-canvas').boundingBox())!;
+ const cx=box.x+box.width/2,cy=box.y+225,scale=Math.max(25,Math.min(95,(box.width-140)/8));
+ await page.mouse.click(cx,cy);
+ await expect(page.getByTestId('coordinates')).toContainText('绝对 X 0 · Y 0');
+ await page.getByLabel('坐标参考点').selectOption('N1');
+ await expect(page.getByTestId('coordinates-N2')).toContainText('相对 ΔX 6 · ΔY 0');
+ const before=await saved(page);
+ await page.mouse.move(cx,cy);await page.mouse.down();await page.mouse.move(cx+scale,cy-scale,{steps:8});
+ await expect(page.getByTestId('coordinates')).toContainText('拖动预览');
+ await expect(page.getByTestId('coordinates-N1')).toContainText('绝对 X 1 · Y 1');
+ expect(await saved(page)).toEqual(before);
+ await page.mouse.up();await expect(page.getByTestId('coordinates')).not.toContainText('拖动预览');
+ expect((await saved(page)).nodes[0]).toMatchObject({x:1,y:1});
+ await page.mouse.click(cx-2*scale,cy-scale);
+ await expect(page.getByLabel('X 坐标',{exact:true})).toBeVisible();
+ await page.getByLabel('坐标参考点').selectOption('N2');
+ await expect(page.getByTestId('coordinates-N1')).toContainText('相对 ΔX -6 · ΔY 0');
+ await page.mouse.move(cx-2*scale,cy-scale);await page.mouse.down();await page.mouse.move(cx-2*scale,cy-2*scale,{steps:8});
+ await expect(page.getByTestId('coordinates-N1')).toContainText('绝对 X 1 · Y 2');await page.mouse.up();
+});

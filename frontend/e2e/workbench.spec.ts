@@ -39,7 +39,7 @@ test('overall frame diagrams show beam and column together with exact hover read
  const diagram=page.getByTestId('structure-diagram');await expect(diagram).toBeVisible();
  const axes=await diagram.getByTestId('structure-axis').evaluateAll(els=>els.map(e=>['x1','y1','x2','y2'].map(a=>Number(e.getAttribute(a)))));
  expect(axes).toHaveLength(2);expect(axes[0][0]).toBeCloseTo(axes[0][2]);expect(axes[0][1]).not.toBe(axes[0][3]);expect(axes[1][1]).toBeCloseTo(axes[1][3]);expect(axes[1][0]).not.toBe(axes[1][2]);
- const svg=diagram.locator('svg'),box=(await svg.boundingBox())!;
+ const svg=diagram.locator('svg');await svg.scrollIntoViewIfNeeded();const box=(await svg.boundingBox())!;
  // Use SVG coordinates transformed through its CTM; preserveAspectRatio adds margins.
  const position=await svg.evaluate((el,coords)=>{const p=new DOMPoint(coords[0],coords[1]).matrixTransform((el as SVGSVGElement).getScreenCTM()!);return {x:p.x,y:p.y};},[(axes[1][0]+axes[1][2])/2,axes[1][1]]);
  expect(box.width).toBeGreaterThan(100);await page.mouse.move(position.x,position.y);

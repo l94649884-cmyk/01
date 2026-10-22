@@ -64,7 +64,9 @@ test('midspan nodal moment displays correct reactions and the two sides of the m
   await load(page,model);await expect(page.getByTestId('max-moment')).toContainText('5');
   await expect(page.locator('.reactions')).toContainText('1.667');await expect(page.locator('.reactions')).toContainText('-1.667');
   await page.getByRole('button',{name:'截面曲线',exact:true}).click();
-  const chart=page.getByRole('img',{name:'弯矩图，可悬停查看数值'}),box=(await chart.boundingBox())!;
+  const chart=page.getByRole('img',{name:'弯矩图，可悬停查看数值'});
+  await chart.scrollIntoViewIfNeeded();
+  const box=(await chart.boundingBox())!;
   await page.mouse.move(box.x+box.width*402.5/800,box.y+box.height*.5);
   await expect(page.getByTestId('chart-readout')).toContainText('M⁻ = 5');await expect(page.getByTestId('chart-readout')).toContainText('M⁺ = -5');
 });
