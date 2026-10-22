@@ -60,3 +60,13 @@ body { font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; font-size:14px
 .history-card-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .history-delete{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:12px;color:#b65349;border:1px solid var(--border);border-radius:7px;padding:9px 8px;}
 .history-delete-message{font-size:12px;color:var(--accent);margin:0 0 12px;}
+
+/* Focused modeling keeps the tools and inspector available, with a full-height canvas. */
+.app-shell.canvas-focused{position:fixed;inset:0;max-width:none;z-index:15;background:var(--bg);}
+.canvas-focused>.app-header,.canvas-focused>.workspace-bar{display:none;}
+.canvas-focused>.workspace{height:100%;min-height:0;margin:0;border-radius:0;grid-template-columns:170px minmax(0,1fr) 250px;}
+.canvas-focused .center-workspace{display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.canvas-focused .model-toolbar,.canvas-focused .editing-tools,.canvas-focused .validation-bar{flex-shrink:0;}
+.canvas-focused .canvas-wrap{flex:1;min-height:180px;height:0;}
+.canvas-focused .results-panel,.canvas-focused .object-drawer{display:none;}
+.canvas-focused .library,.canvas-focused .inspector{min-height:0;overflow:auto;}
