@@ -3,7 +3,7 @@ const saved=(page:import('@playwright/test').Page)=>page.evaluate(()=>JSON.parse
 test.beforeEach(async({page})=>{await page.goto('/');await expect(page.getByTestId('max-moment')).toContainText('15');});
 test('continuous orthogonal drawing creates shared corners and is one undo operation',async({page})=>{
  await page.getByRole('button',{name:'清空模型',exact:true}).click();
- await page.getByRole('button',{name:'连续直角折杆',exact:true}).click();
+ await page.getByRole('button',{name:'添加直角杆',exact:true}).click();
  const box=(await page.getByTestId('beam-canvas').boundingBox())!;
  for(const [x,y] of [[200,250],[380,250],[380,100]])await page.mouse.click(box.x+x,box.y+y);
  await page.getByRole('button',{name:'完成折杆',exact:true}).click();
@@ -13,7 +13,9 @@ test('continuous orthogonal drawing creates shared corners and is one undo opera
  await page.getByRole('button',{name:'撤销',exact:true}).click();await expect(page.locator('.model-count')).toContainText('0 节点 / 0 杆件');
 });
 test('arch generator preserves previous model, solves and remains usable in expanded canvas',async({page})=>{
- await page.getByRole('button',{name:'拱形建模',exact:true}).click();
+ await page.getByRole('button',{name:'添加拱形杆',exact:true}).click();
+ await expect(page.getByRole('dialog',{name:'绘制拱形杆'})).toBeVisible();
+ await page.screenshot({path:'../work/arch-dialog.png'});
  await page.getByRole('button',{name:'生成拱形模型',exact:true}).click();
  await expect(page.locator('.model-count')).toContainText('33 节点 / 32 杆件');
  await expect(page.locator('.validation-bar')).toContainText('平衡校验通过');

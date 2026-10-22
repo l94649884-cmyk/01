@@ -84,20 +84,28 @@ export default function BeamCanvas({ onCoordinatePreview,expanded,onToggleExpand
     setPanActive(false);panPoint.current=null;setStartNode(null);setHint(null);setCursor(null);
     setViewNotice('全部模型已清空 · 可撤销');
   }
+  const wheelView=useRef({width,zoom,center,centerY});
+  wheelView.current={width,zoom,center,centerY};
   useEffect(()=>{
-    const element=container.current;if(!element)return;
-    // React delegates wheel listeners as passive; a native non-passive listener
-    // must cancel page scrolling while the pointer is over the canvas.
+    // One persistent capture listener: never detach it during zoom renders.
+    // Cancel before Konva/React or a scrollable ancestor handles the gesture.
     const zoomAtPointer=(event:WheelEvent)=>{
-    event.preventDefault();
-    const rect=container.current?.getBoundingClientRect();if(!rect)return;
-    const pointer={x:event.clientX-rect.left,y:event.clientY-rect.top};
-    const anchor=toWorld(pointer),nextZoom=Math.max(.05,Math.min(8,zoom*Math.exp(-event.deltaY*.0012))),nextScale=baseScale(width)*nextZoom;
-    setCenter({x:anchor.x-(pointer.x-width/2)/nextScale,y:anchor.y-(centerY-pointer.y)/nextScale});setZoom(nextZoom);setViewNotice('');
+      const element=container.current;
+      if(!element||!event.composedPath().includes(element))return;
+      event.preventDefault();event.stopPropagation();
+      const rect=element.getBoundingClientRect(),v=wheelView.current;
+      const px=event.clientX-rect.left,py=event.clientY-rect.top;
+      const scale=baseScale(v.width)*v.zoom;
+      const anchor={x:(px-v.width/2)/scale+v.center.x,y:(v.centerY-py)/scale+v.center.y};
+      const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?rect.height:1);
+      const nextZoom=Math.max(.05,Math.min(8,v.zoom*Math.exp(-delta*.0012))),nextScale=baseScale(v.width)*nextZoom;
+      const nextCenter={x:anchor.x-(px-v.width/2)/nextScale,y:anchor.y-(v.centerY-py)/nextScale};
+      wheelView.current={...v,zoom:nextZoom,center:nextCenter};
+      setCenter(nextCenter);setZoom(nextZoom);setViewNotice('');
     };
-    element.addEventListener('wheel',zoomAtPointer,{passive:false});
-    return()=>element.removeEventListener('wheel',zoomAtPointer);
-  },[width,zoom,center.x,center.y,centerY]);
+    document.addEventListener('wheel',zoomAtPointer,{passive:false,capture:true});
+    return()=>document.removeEventListener('wheel',zoomAtPointer,true);
+  },[]);
   useEffect(()=>{
     if(!panActive)return;
     const move=(event:MouseEvent)=>{
@@ -212,7 +220,7 @@ export default function BeamCanvas({ onCoordinatePreview,expanded,onToggleExpand
   return <div className="canvas-wrap" ref={container} data-testid="beam-canvas" data-panning={panActive||undefined} style={{background:palette.bg}} onDragOver={e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();preview((e.dataTransfer.types.includes('application/ligou-tool')?tool:'select'),toWorld({x:e.clientX-r.left,y:e.clientY-r.top}));}} onDrop={e=>{e.preventDefault();const active=e.dataTransfer.getData('application/ligou-tool') as Tool;const r=e.currentTarget.getBoundingClientRect(); if(active)place(active,toWorld({x:e.clientX-r.left,y:e.clientY-r.top}));}}>
     <div className="canvas-caption"><span className="live-dot"/>二维结构工作台<span className="caption-separator">/</span><span>单位 m · kN</span></div>
     <div className="canvas-controls"><button className="canvas-expand" title={expanded?"退出展开画布（Esc）":"展开画布"} aria-label={expanded?"退出展开画布":"展开画布"} aria-pressed={expanded} onClick={onToggleExpanded}>{expanded?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</button><button title="缩小视图" aria-label="缩小视图" onClick={()=>setZoom(z=>Math.max(.05,z/1.2))}><Minus size={15}/></button><span>{Math.round(zoom*100)}%</span><button title="放大视图" aria-label="放大视图" onClick={()=>setZoom(z=>Math.min(8,z*1.2))}><Plus size={15}/></button><button title="适应模型" aria-label="适应模型" onClick={fit}><Crosshair size={16}/></button><button className="canvas-clear" title="清空全部节点、杆件、支座和荷载（可撤销）" aria-label="清空模型" onClick={clearAll}><Trash2 size={14}/><span>清空</span></button></div>
-    {tool==='polyline'&&<div className="polyline-controls"><span>依次点击端点 · 自动正交 · {draftPoints.length} 点</span><button disabled={draftPoints.length<2} onClick={finishPolyline}>完成折杆</button><button disabled={!draftPoints.length} onClick={()=>setDraftPoints(p=>p.slice(0,-1))}>退回一点</button><button onClick={()=>onTool('select')}>取消绘制</button></div>}
+    {tool==='polyline'&&<div className="polyline-controls"><span>{draftPoints.length===0?'① 点击起点':draftPoints.length===1?'② 点击转角':draftPoints.length===2?'③ 点击终点形成直角，再点完成':'④ 点击完成折杆，或继续添加转角'} · {draftPoints.length} 点</span><button disabled={draftPoints.length<2} onClick={finishPolyline}>完成折杆</button><button disabled={!draftPoints.length} onClick={()=>setDraftPoints(p=>p.slice(0,-1))}>退回一点</button><button onClick={()=>onTool('select')}>取消绘制</button></div>}
     <Stage width={width} height={height} ref={stage} onMouseLeave={()=>{setSelectionBox(null);if(!panActive){setCursor(null);setHint(null);}}} onMouseDown={e=>{if(tool==='select'&&e.evt.button===0&&e.target===e.target.getStage()){const p=stage.current?.getPointerPosition();if(p){const w=toWorld(p);setSelectionBox({start:w,end:w});}}}} onMouseUp={e=>{if(!selectionBox)return;const moved=Math.hypot(selectionBox.end.x-selectionBox.start.x,selectionBox.end.y-selectionBox.start.y)*scale>4;if(moved){onBatchSelect(boxItems(model,selectionBox.start,selectionBox.end),e.evt.shiftKey);suppressClick.current=true;}setSelectionBox(null);}} onMouseMove={()=>{if(panActive)return;const p=stage.current?.getPointerPosition();if(p){const w=toWorld(p);if(selectionBox)setSelectionBox({...selectionBox,end:w});setCursor(w);preview(tool,w);}}} onClick={e=>{if(suppressClick.current){suppressClick.current=false;return;}if(('button' in e.evt&&e.evt.button!==0)||panActive)return;if(e.target===e.target.getStage()){const p=stage.current?.getPointerPosition();if(p)place(tool,toWorld(p));}}}>
       <Layer>
         {gridX.map(x=><Line key={`gx${x}`} points={[toScreen({x,y:0}).x,50,toScreen({x,y:0}).x,height-32]} stroke={Number.isInteger(x)?palette.majorGrid:palette.grid} strokeWidth={1} listening={false}/>)}

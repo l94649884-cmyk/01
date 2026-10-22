@@ -95,3 +95,17 @@ test('expanded canvas fills the modeling workspace, resizes and exits with Escap
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('ligou-lab-workspace-v1')!).history.present)).toEqual(before);
 });
 
+
+
+test('rapid canvas wheel events stay out of page handlers across renders and zoom limits',async({page})=>{
+ await page.setViewportSize({width:1280,height:720});
+ await page.evaluate(()=>{window.scrollTo(0,100);document.body.dataset.wheelCount='0';window.addEventListener('wheel',()=>{document.body.dataset.wheelCount=String(Number(document.body.dataset.wheelCount)+1);});});
+ const box=(await page.getByTestId('beam-canvas').boundingBox())!;
+ await page.mouse.move(box.x+box.width/2,box.y+160);
+ for(let i=0;i<30;i++)await page.mouse.wheel(0,i<15?-240:240);
+ await page.waitForTimeout(200);
+ expect(await page.evaluate(()=>window.scrollY)).toBe(100);
+ expect(await page.evaluate(()=>document.body.dataset.wheelCount)).toBe('0');
+ await page.mouse.move(10,300);await page.mouse.wheel(0,240);
+ await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBeGreaterThan(100);
+});

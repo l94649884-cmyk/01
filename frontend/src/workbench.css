@@ -81,3 +81,10 @@ body { font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; font-size:14px
 .coordinate-panel{padding:12px;margin:12px 0;background:var(--surface-alt);border:1px solid var(--border);border-radius:8px;font-size:11px;display:flex;flex-direction:column;gap:10px}
 .coordinate-panel label,.coordinate-panel div{display:flex;flex-direction:column;gap:5px}.coordinate-panel small{color:var(--muted);line-height:1.7}.coordinate-panel select{width:100%;padding:6px;border:1px solid var(--border);border-radius:5px;color:var(--text);background:var(--surface)}.coordinate-panel span{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 @media(min-width:1600px){.center-workspace{grid-template-rows:48px auto auto 384px min-content 1fr}.editing-tools{grid-column:1;grid-row:2}.construction-tools{grid-column:1;grid-row:3}.canvas-wrap{grid-row:4}.validation-bar{grid-row:5}.object-drawer{grid-row:6}.results-panel{grid-row:1/7}}
+
+.canvas-wrap{overscroll-behavior:none}
+.arch-backdrop{position:fixed;inset:0;z-index:30;background:#14283866;display:grid;place-items:center;padding:24px}
+.construction-tools .arch-backdrop form{position:relative;inset:auto;width:min(560px,95vw);max-height:90vh;overflow:auto;padding:24px;box-shadow:0 24px 70px #0004}
+.arch-backdrop svg{width:100%;height:110px;color:var(--accent)}.arch-backdrop svg text{font-size:11px;fill:currentColor}
+.arch-backdrop button[aria-label]{position:absolute;right:18px;top:17px}.arch-backdrop form strong{padding-right:50px;font-size:16px}
+.library .tool-symbol{font-size:25px}
