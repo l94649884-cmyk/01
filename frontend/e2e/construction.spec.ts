@@ -22,7 +22,7 @@ test('arch generator preserves previous model, solves and remains usable in expa
  expect((await saved(page)).name).toContain('32 段近似');
  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('ligou-lab-workspace-v1')!).archives.length)).toBeGreaterThan(0);
  await page.getByRole('button',{name:'展开画布',exact:true}).click();
- await expect(page.getByRole('button',{name:'拱形建模',exact:true})).toBeVisible();
+ await expect(page.getByLabel('全屏绘图工具')).toBeVisible();
  await page.screenshot({path:'../work/arch-expanded.png'});
 });
 test('member endpoints and node coordinates update during drag before committing and support relative references',async({page})=>{

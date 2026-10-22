@@ -88,3 +88,11 @@ body { font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; font-size:14px
 .arch-backdrop svg{width:100%;height:110px;color:var(--accent)}.arch-backdrop svg text{font-size:11px;fill:currentColor}
 .arch-backdrop button[aria-label]{position:absolute;right:18px;top:17px}.arch-backdrop form strong{padding-right:50px;font-size:16px}
 .library .tool-symbol{font-size:25px}
+
+/* Canvas-only mode, including an embedded WebView without Fullscreen API support. */
+.canvas-focused>.workspace{display:block;border:0;height:100dvh;min-height:0}
+.canvas-focused .library,.canvas-focused .inspector,.canvas-focused .model-toolbar,.canvas-focused .editing-tools,.canvas-focused .construction-tools,.canvas-focused .validation-bar{display:none}
+.canvas-focused .center-workspace{width:100%;height:100%;overflow:hidden}
+.canvas-focused .canvas-wrap{flex:1;width:100%;height:100%;min-height:0;border:0}
+.canvas-controls .canvas-expand{width:auto;display:flex;gap:5px;padding:5px 8px}
+.fullscreen-tool{position:absolute;left:20px;top:55px;z-index:5;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)}

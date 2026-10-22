@@ -35,11 +35,18 @@ export default function App(){
   const [coordinatePreview,setCoordinatePreview]=useState<CoordinatePreview>(null);
   const [archOpen,setArchOpen]=useState(false);
   const [canvasExpanded,setCanvasExpanded]=useState(false);
+  const ownFullscreen=useRef(false);
+  useEffect(()=>{const changed=()=>{if(ownFullscreen.current&&!document.fullscreenElement){ownFullscreen.current=false;setCanvasExpanded(false);}};document.addEventListener('fullscreenchange',changed);return()=>document.removeEventListener('fullscreenchange',changed);},[]);
+  async function toggleCanvasFullscreen(){
+    if(canvasExpanded){setCanvasExpanded(false);if(ownFullscreen.current&&document.fullscreenElement)await document.exitFullscreen().catch(()=>{});ownFullscreen.current=false;return;}
+    setCanvasExpanded(true);
+    if(!document.fullscreenElement&&document.documentElement.requestFullscreen){try{await document.documentElement.requestFullscreen();ownFullscreen.current=true;}catch{/* Embedded browsers may disallow system fullscreen; the canvas still fills the window. */}}
+  }
   useEffect(()=>{
     if(!canvasExpanded)return;
     const overflow=document.body.style.overflow,scrollY=window.scrollY;
     document.body.style.overflow='hidden';
-    const close=(event:KeyboardEvent)=>{if(event.key==='Escape')setCanvasExpanded(false);};
+    const close=(event:KeyboardEvent)=>{if(event.key==='Escape'){setCanvasExpanded(false);if(ownFullscreen.current&&document.fullscreenElement)void document.exitFullscreen().catch(()=>{});}};
     window.addEventListener('keydown',close);
     return()=>{document.body.style.overflow=overflow;window.removeEventListener('keydown',close);requestAnimationFrame(()=>window.scrollTo(0,scrollY));};
   },[canvasExpanded]);
@@ -131,7 +138,7 @@ export default function App(){
       <div className="center-workspace"><div className="model-toolbar"><div className="toolbar-label"><span>01</span><b>结构模型</b><span className="model-count">{model.nodes.length} 节点 / {model.members.length} 杆件</span></div><div className="toolbar-actions"><button aria-label="撤销" title="撤销 Ctrl+Z" disabled={!history.past.length} onClick={()=>undoRedo('undo')}><Undo2 size={16}/></button><button aria-label="重做" title="重做 Ctrl+Shift+Z" disabled={!history.future.length} onClick={()=>undoRedo('redo')}><Redo2 size={16}/></button><span className="divider"/><label className="auto-solve"><input type="checkbox" checked={automatic} onChange={e=>{manualSnapshot.current="";setAutomatic(e.target.checked);setRequestId(0);}}/>自动求解</label></div></div>
         <EditingTools model={model} items={selections} onChange={change} onSelection={setSelections} onMessage={setMessage}/>
         <ConstructionTools open={archOpen} onOpen={setArchOpen} tool={tool} onTool={setTool} onMessage={setMessage} onArch={m=>replaceDocument(m,'切换算例前','已生成抛物线拱，采用分段直杆近似；原模型已存入历史。')}/>
-        <BeamCanvas onCoordinatePreview={setCoordinatePreview} expanded={canvasExpanded} onToggleExpanded={()=>setCanvasExpanded(value=>!value)} selections={selections} onBatchSelect={(items,additive)=>setSelections(prev=>additive?[...prev,...items.filter(s=>!prev.some(p=>p.type===s.type&&p.id===s.id))]:items)} viewRevision={viewRevision} model={model} selection={selection} tool={tool} solution={solution} onChange={change} onSelect={setSelection} onTool={setTool} onMessage={setMessage} onClear={clearModel} palette={themePalette}/>
+        <BeamCanvas onCoordinatePreview={setCoordinatePreview} expanded={canvasExpanded} onToggleExpanded={()=>void toggleCanvasFullscreen()} selections={selections} onBatchSelect={(items,additive)=>setSelections(prev=>additive?[...prev,...items.filter(s=>!prev.some(p=>p.type===s.type&&p.id===s.id))]:items)} viewRevision={viewRevision} model={model} selection={selection} tool={tool} solution={solution} onChange={change} onSelect={setSelection} onTool={setTool} onMessage={setMessage} onClear={clearModel} palette={themePalette}/>
         <div className={`validation-bar ${errors.length?'has-errors':''}`} role="status">{errors.length?<AlertCircle size={15}/>:<CheckCircle2 size={15}/>}<span>{errors.length?`${errors.length} 项待处理 · ${errors[0]}`:solution?'模型验证与平衡校验通过':status==='solving'?'正在计算…':'模型可求解'}</span>{errors.length>1&&<details><summary>展开</summary><ul>{errors.map(e=><li key={e}>{e}</li>)}</ul></details>}</div>
         <Results solution={solution} status={status} errors={errors} model={model} selection={selection} palette={themePalette}/>
         <div className="object-drawer"><details><summary><Layers3 size={14}/>模型对象 <span>{count}</span><small>选择任意对象进行编辑</small></summary><div className="object-list">{(Object.keys(objectNames) as Collection[]).flatMap(type=>model[type].map((o,i)=><button key={o.id} className={selections.some(s=>s.id===o.id)?'active':''} onClick={e=>setSelection({type,id:o.id},e.shiftKey)}>{objectNames[type]} {i+1}<code>{o.id.slice(0,8)}</code></button>))}{!count&&<p>画布中还没有对象。</p>}</div></details></div>

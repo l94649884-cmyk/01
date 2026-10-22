@@ -80,12 +80,20 @@ test('expanded canvas fills the modeling workspace, resizes and exits with Escap
   const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('ligou-lab-workspace-v1')!).history.present);
   await page.getByRole('button',{name:'展开画布',exact:true}).click();
   await expect(page.locator('.app-shell')).toHaveClass(/canvas-focused/);
-  await expect(page.getByTestId('tool-node')).toBeVisible();
+  await expect(page.getByTestId('tool-node')).toBeHidden();
+  await expect(page.getByLabel('全屏绘图工具')).toBeVisible();
+  await expect(page.locator('.inspector')).toBeHidden();
   await expect(page.locator('.results-panel')).toBeHidden();
-  await expect.poll(async()=>(await canvas.boundingBox())!.height).toBeGreaterThan(500);
+  await expect.poll(async()=>(await canvas.boundingBox())!.height).toBe(720);
+  expect(await page.evaluate(()=>!!document.fullscreenElement)).toBe(true);
+  await page.getByRole('button',{name:'退出展开画布',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>document.fullscreenElement===null)).toBe(true);
   await page.setViewportSize({width:1920,height:1080});
-  await expect.poll(async()=>(await canvas.boundingBox())!.height).toBeGreaterThan(850);
-  await expect.poll(async()=>(await canvas.boundingBox())!.width).toBeGreaterThan(1400);
+  // Verify the embedded-browser fallback when system fullscreen is unavailable.
+  await page.evaluate(()=>{document.documentElement.requestFullscreen=()=>Promise.reject(new Error('not supported'));});
+  await page.getByRole('button',{name:'展开画布',exact:true}).click();
+  await expect.poll(async()=>(await canvas.boundingBox())!.height).toBe(1080);
+  await expect.poll(async()=>(await canvas.boundingBox())!.width).toBe(1920);
   await expect.poll(()=>canvas.locator('.konvajs-content').evaluate(e=>e.clientHeight)).toBeGreaterThan(850);
   await page.getByRole('button',{name:'适应模型'}).click();
   await page.keyboard.press('Escape');
