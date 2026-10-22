@@ -27,6 +27,10 @@
 
 ![统一作用点工作台](docs/shared-point.png)
 
+## 独立桌面版（Windows）
+
+可双击启动的独立窗口，内置 Python 求解器，无需单独启动浏览器或安装 Node.js / Python。桌面源码、构建、验收和便携 ZIP 打包步骤见 [桌面版说明](desktop/README.md)。要求 Windows 10 / 11 x64 与 WebView2 Runtime。
+
 ## 快速启动（Windows）
 
 需要 Node.js 22.12+（建议 24 LTS）和 Python 3.12+（本机验证为 3.12）。首次安装：

@@ -1,0 +1,21 @@
+力构 Lab · Windows 桌面版 0.7
+
+双击 LigouLab.exe 打开独立窗口，无需安装 Python 或 Node.js。
+程序内含前端与真实力学求解器；建模和计算在本机执行，无需联网。
+请保留 LigouLab.exe 与 _internal 文件夹在同一目录，不要只复制 exe。
+
+系统要求：Windows 10 / 11，64 位，Microsoft Edge WebView2 Runtime。
+当前电脑已经验证具备此运行环境。其他电脑若缺少 WebView2，请从微软官网下载 Evergreen Runtime：
+https://developer.microsoft.com/microsoft-edge/webview2/
+
+保存：使用“保存 JSON”选择文件位置；使用“载入”打开 JSON 文件。
+草稿、历史、主题保存在 %LOCALAPPDATA%\LigouLab\WebView。
+桌面版与浏览器版的草稿独立；原网页模型可先导出 JSON，再在桌面版载入。
+关闭窗口会停止本程序的后台计算服务。再次双击会激活已有窗口，不会重复启动。
+运行日志：%LOCALAPPDATA%\LigouLab\desktop.log。
+
+程序仅在本机 127.0.0.1:18764 提供内部计算服务，不对局域网开放。
+此构建未购买商业代码签名证书；跨电脑下载时 Windows 可能提示“未知发布者”。
+
+开源仓库：https://github.com/l94649884-cmyk/01
+原创代码使用 MIT License，依赖许可证见“第三方许可”目录。

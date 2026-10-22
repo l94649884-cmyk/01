@@ -12,3 +12,9 @@ playwright-report/
 .env
 .env.*
 !.env.example
+.desktop-venv/
+desktop/build/
+desktop/dist/
+desktop/*.spec
+desktop/self-test-*/
+desktop/releases/
