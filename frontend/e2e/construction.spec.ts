@@ -5,7 +5,11 @@ test('continuous orthogonal drawing creates shared corners and is one undo opera
  await page.getByRole('button',{name:'清空模型',exact:true}).click();
  await page.getByRole('button',{name:'添加直角杆',exact:true}).click();
  const box=(await page.getByTestId('beam-canvas').boundingBox())!;
- for(const [x,y] of [[200,250],[380,250],[380,100]])await page.mouse.click(box.x+x,box.y+y);
+ for(const [i,[x,y]] of [[200,250],[380,250],[380,100]].entries()){
+  await page.mouse.move(box.x+x,box.y+y);
+  await expect(page.getByTestId('beam-canvas')).toHaveAttribute('data-hint',i===0?'点击空白处或节点，确定起点':i===1?'沿水平或竖直方向点击，确定转角':'点击下一端点，或点击完成折杆');
+  await page.mouse.click(box.x+x,box.y+y);
+ }
  await page.getByRole('button',{name:'完成折杆',exact:true}).click();
  await expect(page.locator('.model-count')).toContainText('3 节点 / 2 杆件');
  const m=await saved(page);expect(m.members[0].end).toBe(m.members[1].start);
