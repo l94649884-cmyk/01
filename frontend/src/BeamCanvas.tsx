@@ -1,7 +1,7 @@
 import {createPolyline,orthogonalPoint} from './construction';
 import type {CoordinatePreview} from './Coordinates';
-import { useEffect, useRef, useState } from 'react';
-import { Arrow, Circle, Group, Layer, Line, Rect, Stage, Text } from 'react-konva';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Arrow, Circle, Group, Label, Layer, Line, Rect, Stage, Tag, Text } from 'react-konva';
 import type Konva from 'konva';
 import { Crosshair, Maximize2, Minimize2, Minus, Plus, Trash2 } from 'lucide-react';
 import { fmt, snap, uid, resolvePointLoad } from './model';
@@ -28,6 +28,12 @@ type Props = {
   viewRevision?: number;
 };
 type Point = { x: number; y: number };
+
+function DimensionLabel({x,y,text,background,color}:{x:number;y:number;text:string;background:string;color:string}) {
+  const label=useRef<Konva.Label>(null);
+  useLayoutEffect(()=>{const node=label.current;if(node)node.offsetX(node.width()/2);},[text]);
+  return <Label ref={label} x={x} y={y-7.5} listening={false}><Tag fill={background}/><Text text={text} fontSize={11} padding={2} fill={color}/></Label>;
+}
 
 function SupportSymbol({ kind, color, fill }: { kind: SupportKind; color: string; fill:string }) {
   if (kind === 'fixed') return <Group><Line points={[-10, -25, -10, 28]} stroke={color} strokeWidth={3}/>{[-24, -14, -4, 6, 16, 26].map(y => <Line key={y} points={[-10, y, -23, y + 10]} stroke={color} strokeWidth={1.4}/>)}</Group>;
@@ -239,7 +245,7 @@ export default function BeamCanvas({ onCoordinatePreview,expanded,onToggleExpand
             <Line points={[pa.x,pa.y,pb.x,pb.y]} stroke={isSelected?green:ink} strokeWidth={5} lineCap="round"/>
             {(len>90||isSelected)&&<Text x={(pa.x+pb.x)/2-42} y={(pa.y+pb.y)/2+16} text={m.id.startsWith('B-')?'梁段':m.id} fontSize={11} fill={palette.muted} listening={false} width={84} align="center"/>}
             {(len>90||isSelected)&&<Group listening={false}><Line points={[da.x,da.y,db.x,db.y]} stroke={palette.axis} strokeWidth={1}/><Line points={[da.x-nx*5,da.y-ny*5,da.x+nx*5,da.y+ny*5]} stroke={palette.axis}/><Line points={[db.x-nx*5,db.y-ny*5,db.x+nx*5,db.y+ny*5]} stroke={palette.axis}/>
-            <Rect x={(da.x+db.x)/2-32} y={(da.y+db.y)/2-9} width={64} height={18} fill={palette.bg}/><Text x={(da.x+db.x)/2-32} y={(da.y+db.y)/2-7} text={`${fmt(Math.hypot(b.x-a.x,b.y-a.y))} m`} width={64} align="center" fontSize={12} fill={palette.muted}/></Group>}
+            <DimensionLabel x={(da.x+db.x)/2} y={(da.y+db.y)/2} text={`${fmt(Math.hypot(b.x-a.x,b.y-a.y))} m`} background={palette.bg} color={palette.muted}/></Group>}
           </Group>;
         })}
         {model.distributedLoads.map((q,i)=>{
