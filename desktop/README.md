@@ -37,3 +37,5 @@ desktop\dist\LigouLab\LigouLab.exe --self-test desktop\self-test-local\second.js
 这是便携文件夹版本，不是安装向导；不修改注册表或申请管理员权限。
 
 桌面验收还检查新版连续折杆入口、实时坐标面板，以及实际生成并求解 32 段抛物线拱。
+
+启动地址附带当前前端入口文件的 SHA-256 摘要作为 build 参数，前端更新后自动使用新入口 URL，避免 WebView 复用旧缓存。端口和用户资料目录不变，草稿与模型历史继续保留。

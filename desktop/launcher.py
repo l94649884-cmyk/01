@@ -1,6 +1,7 @@
 """Windows desktop shell; the web UI and mechanics solver are unchanged."""
 from pathlib import Path
 import argparse
+import hashlib
 import ctypes
 from ctypes import wintypes
 import json
@@ -89,7 +90,9 @@ def main():
             time.sleep(.05)
         webview.settings['ALLOW_DOWNLOADS'] = True
         url = f'http://127.0.0.1:{port}'
-        window = webview.create_window(TITLE, url, width=1440, height=960, min_size=(1000, 700), background_color='#f5f7fa', hidden=bool(report))
+        # A changed frontend must not reuse a stale cached entry page.
+        build_id = hashlib.sha256((ROOT / 'frontend/dist/index.html').read_bytes()).hexdigest()[:16]
+        window = webview.create_window(TITLE, url + '?build=' + build_id, width=1440, height=960, min_size=(1000, 700), background_color='#f5f7fa', hidden=bool(report))
         window.events.closed += lambda: setattr(server, 'should_exit', True)
 
         def smoke():
