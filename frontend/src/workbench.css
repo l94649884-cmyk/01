@@ -101,7 +101,6 @@ body { font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; font-size:14px
 .canvas-focused .canvas-viewport{flex:1;width:100%;height:100%;min-height:0;overflow:hidden}
 .canvas-focused .construction-tools{display:contents}
 .canvas-focused .construction-tools>button,.canvas-focused .construction-tools>small{display:none}
-.canvas-controls .canvas-size-trigger{width:auto;display:flex;gap:4px;padding:5px 7px}
 .fullscreen-palette{position:absolute;left:18px;top:60px;width:206px;max-height:calc(100% - 110px);overflow:auto;overscroll-behavior:contain;z-index:5;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:22px;box-shadow:0 12px 35px #14283818;color:var(--text)}
 .fullscreen-palette.collapsed{width:48px;padding:6px;border-radius:16px}
 .fullscreen-palette-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;font-size:13px}
@@ -114,13 +113,33 @@ body { font-family:Inter,"Segoe UI","Microsoft YaHei",sans-serif; font-size:14px
 .fullscreen-palette section button{display:flex;align-items:center;gap:6px;border-radius:12px;padding:10px 7px;border:1px solid transparent;font-size:11px;text-align:left;white-space:nowrap;min-height:40px}
 .fullscreen-palette button.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
 .fullscreen-palette button:hover{background:var(--accent-soft)}
-.canvas-size-backdrop{position:fixed;inset:0;background:#14283866;z-index:40;display:grid;place-items:center;padding:20px}
-.canvas-size-dialog{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:22px;padding:24px;width:min(520px,95vw);max-height:92vh;overflow:auto;box-shadow:0 24px 70px #0004;display:flex;flex-direction:column;gap:14px}
-.canvas-size-dialog>div:first-child{display:flex;justify-content:space-between;align-items:center}.canvas-size-dialog h2{font-size:19px}.canvas-size-dialog p{font-size:11px;color:var(--muted);line-height:1.8}
-.canvas-size-dialog label{font-size:12px;display:flex;align-items:center;gap:7px}.canvas-size-dialog input[type=radio],.canvas-size-dialog input[type=checkbox]{accent-color:var(--accent)}
-.canvas-size-dialog button{border:1px solid var(--border);border-radius:10px;padding:8px 12px}.canvas-size-dialog .primary{background:var(--accent);color:var(--surface)}
-.canvas-size-fields{display:flex;gap:14px;flex-wrap:wrap}.canvas-size-fields label{flex:1}.canvas-size-fields input{width:100%;min-width:60px;border:1px solid var(--border);border-radius:10px;padding:9px;background:var(--surface-alt);color:var(--text)}
-.canvas-size-presets{display:flex;gap:6px;flex-wrap:wrap;font-size:11px}.canvas-size-dialog fieldset{border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:12px}.canvas-size-dialog legend{font-size:12px;padding:0 5px}.canvas-size-dialog [role=alert]{color:#b65349}
 
-.canvas-size-fields label{white-space:nowrap;min-width:0}.canvas-size-fields input{width:0;flex:1}
 @media(min-width:1600px){.center-workspace{grid-template-rows:48px auto auto auto min-content 1fr}}
+
+/* Resizable desktop workspace: the drawing surface always fits its visible pane. */
+.resizable-workspace{height:calc(100dvh - 188px);min-height:540px;grid-template-columns:clamp(150px,var(--left-panel),28%) 8px minmax(320px,1fr) 8px clamp(220px,var(--right-panel),28%);overflow:hidden}
+.resizable-workspace>.library,.resizable-workspace>.inspector{min-width:0;min-height:0;overflow:auto;border:0;overscroll-behavior:contain}
+.resizable-workspace>.center-workspace{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.resizable-workspace .model-toolbar,.resizable-workspace .editing-tools,.resizable-workspace .construction-tools,.resizable-workspace .validation-bar,.resizable-workspace .object-drawer{flex-shrink:0}
+.resizable-workspace .model-toolbar{padding:0 12px;gap:6px}
+.resizable-workspace .toolbar-actions{gap:1px}.reset-layout{white-space:nowrap;font-size:11px;color:var(--muted)}
+.resizable-workspace .canvas-viewport{flex:none;width:100%;height:clamp(200px,var(--canvas-height),calc(100% - 300px));overflow:hidden}
+.resizable-workspace .canvas-wrap{width:100%;height:100%;overflow:hidden}
+.resizable-workspace .canvas-caption{top:52px}
+.resizable-workspace .canvas-controls{max-width:calc(100% - 16px);right:8px;flex-wrap:wrap}
+.resizable-workspace .results-panel{flex:1;min-height:100px;overflow:auto;border-left:0;overscroll-behavior:contain}
+.resizable-workspace .object-drawer{max-height:120px;overflow:auto;width:100%}
+.panel-splitter{position:relative;display:flex;align-items:center;justify-content:center;background:var(--surface-alt);touch-action:none;user-select:none;z-index:5;outline-offset:-2px}
+.panel-splitter.vertical{width:8px;cursor:col-resize}
+.panel-splitter.horizontal{height:10px;flex:none;cursor:row-resize}
+.panel-splitter span{background:var(--border);border-radius:4px;pointer-events:none}
+.panel-splitter.vertical span{width:3px;height:36px}.panel-splitter.horizontal span{width:44px;height:3px}
+.panel-splitter:hover,.panel-splitter.dragging,.panel-splitter:focus-visible{background:var(--accent-soft)}
+.panel-splitter:hover span,.panel-splitter.dragging span,.panel-splitter:focus-visible span{background:var(--accent)}
+.canvas-focused>.resizable-workspace{height:100dvh;min-height:0}
+.canvas-focused .panel-splitter{display:none}
+.canvas-focused .resizable-workspace .canvas-viewport{flex:1;height:100%;min-height:0}
+@media(max-width:1150px){.resizable-workspace .toolbar-label .model-count{display:none}.resizable-workspace .auto-solve{font-size:10px}}
+
+.resizable-workspace>.library>*{flex-shrink:0}
+.resizable-workspace>.library>.aside-heading{height:48px;position:sticky;top:0;background:var(--surface);z-index:2}

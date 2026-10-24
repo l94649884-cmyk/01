@@ -54,7 +54,7 @@ test('middle mouse drag pans the canvas and preserves model geometry',async({pag
 
 test('wheel zoom in a short window does not scroll the page, but scrolling outside still works',async({page})=>{
   await page.setViewportSize({width:1280,height:720});
-  await page.evaluate(()=>window.scrollTo(0,100));
+  await page.evaluate(()=>{document.body.style.paddingBottom='600px';window.scrollTo(0,100);});
   await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(100);
   const canvas=page.getByTestId('beam-canvas');
   const box=(await canvas.boundingBox())!;
@@ -107,7 +107,7 @@ test('expanded canvas fills the modeling workspace, resizes and exits with Escap
 
 test('rapid canvas wheel events stay out of page handlers across renders and zoom limits',async({page})=>{
  await page.setViewportSize({width:1280,height:720});
- await page.evaluate(()=>{window.scrollTo(0,100);document.body.dataset.wheelCount='0';window.addEventListener('wheel',()=>{document.body.dataset.wheelCount=String(Number(document.body.dataset.wheelCount)+1);});});
+ await page.evaluate(()=>{document.body.style.paddingBottom='600px';window.scrollTo(0,100);document.body.dataset.wheelCount='0';window.addEventListener('wheel',()=>{document.body.dataset.wheelCount=String(Number(document.body.dataset.wheelCount)+1);});});
  const box=(await page.getByTestId('beam-canvas').boundingBox())!;
  await page.mouse.move(box.x+box.width/2,box.y+160);
  for(let i=0;i<30;i++)await page.mouse.wheel(0,i<15?-240:240);

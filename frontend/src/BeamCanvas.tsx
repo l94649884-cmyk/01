@@ -1,11 +1,10 @@
 import CanvasTools from './CanvasTools';
-import CanvasSizeDialog,{loadCanvasSize,canvasSizeKey,type CanvasSize} from './CanvasSize';
 import {createPolyline,orthogonalPoint} from './construction';
 import type {CoordinatePreview} from './Coordinates';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Arrow, Circle, Group, Label, Layer, Line, Rect, Stage, Tag, Text } from 'react-konva';
 import type Konva from 'konva';
-import { Settings2, Crosshair, Maximize2, Minimize2, Minus, Plus, Trash2 } from 'lucide-react';
+import { Crosshair, Maximize2, Minimize2, Minus, Plus, Trash2 } from 'lucide-react';
 import { fmt, snap, uid, resolvePointLoad } from './model';
 import type { BeamModel, BeamNode, Member, Selection, Solution, SupportKind, Tool } from './model';
 import {boxItems,moveItems,type Item} from './editing';
@@ -13,7 +12,7 @@ import { connectionError } from './geometry';
 import { distributedGlyph } from './loadGeometry';
 import { fixedSupportRotation } from './supportGeometry';
 import { momentAnchor, momentArrowPoints, nearestMomentTarget, momentTargets, resolveMomentTarget, pointOnMember, momentAttachment, momentSideLabel } from './momentGeometry';
-import { baseScale, fitViewport, initialViewport, drawingRangeViewport } from './viewport';
+import { baseScale, fitViewport, initialViewport } from './viewport';
 import type { Viewport } from './viewport';
 import { inferLoadDirection, loadDirectionLabel } from './loadDirection';
 import type { ThemePalette } from './themes';
@@ -62,9 +61,6 @@ export default function BeamCanvas({ onCoordinatePreview,onArch,expanded,onToggl
   const [viewNotice,setViewNotice]=useState('');
   const [panActive,setPanActive]=useState(false);
   const [height,setHeight] = useState(384);
-  const [canvasSize,setCanvasSize]=useState(loadCanvasSize);
-  const [sizeOpen,setSizeOpen]=useState(false);
-  function applyCanvasSize(value:CanvasSize){setCanvasSize(value);setSizeOpen(false);try{localStorage.setItem(canvasSizeKey,JSON.stringify(value));onMessage('画布设置已保存，模型坐标保持不变。');}catch{onMessage('画布设置已应用，但无法保存到本机。');}}
 
   const scale = baseScale(width) * zoom;
   const toScreen = (p: Point) => ({ x: width/2 + (p.x-center.x)*scale, y: centerY - (p.y-center.y)*scale });
@@ -144,7 +140,7 @@ export default function BeamCanvas({ onCoordinatePreview,onArch,expanded,onToggl
   useEffect(() => { if (startNode && !nodes.has(startNode)) setStartNode(null); }, [model, startNode]);
   // Reframe on document changes and measured layout changes, not on every model edit.
   const latestNodes = useRef(model.nodes); latestNodes.current = model.nodes;
-  useEffect(()=>{applyViewport(canvasSize.showRange?drawingRangeViewport(canvasSize.worldWidth,canvasSize.worldHeight,width,height):initialViewport(latestNodes.current,width,height));setStartNode(null);setHint(null);if(latestNodes.current.length)setViewNotice('');},[width,height,viewRevision,canvasSize]);
+  useEffect(()=>{applyViewport(initialViewport(latestNodes.current,width,height));setStartNode(null);setHint(null);if(latestNodes.current.length)setViewNotice('');},[width,height,viewRevision]);
   function chooseMemberEnd(n: BeamNode) {
     if (!startNode) { setStartNode(n.id); onMessage('起点已吸附；点击另一个节点完成杆件。'); return; }
     if (startNode===n.id) { onMessage('杆件两端不能是同一节点。'); return; }
@@ -231,16 +227,14 @@ export default function BeamCanvas({ onCoordinatePreview,onArch,expanded,onToggl
   const gridY:number[]=[];
   const worldBottom=toWorld({x:0,y:height-32}).y,worldTop=toWorld({x:0,y:50}).y;
   for(let y=Math.ceil(worldBottom/step)*step;y<=worldTop;y+=step)gridY.push(y);
-  return <div className="canvas-viewport" style={!expanded&&canvasSize.mode==='custom'?{height:canvasSize.height}:undefined}><div className="canvas-wrap" ref={container} data-testid="beam-canvas" data-hint={hint?.label} data-panning={panActive||undefined} style={{background:palette.bg,width:!expanded&&canvasSize.mode==='custom'?canvasSize.width:'100%',height:'100%'}} onDragOver={e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();preview((e.dataTransfer.types.includes('application/ligou-tool')?tool:'select'),toWorld({x:e.clientX-r.left,y:e.clientY-r.top}));}} onDrop={e=>{e.preventDefault();const active=e.dataTransfer.getData('application/ligou-tool') as Tool;const r=e.currentTarget.getBoundingClientRect(); if(active)place(active,toWorld({x:e.clientX-r.left,y:e.clientY-r.top}));}}>
+  return <div className="canvas-viewport"><div className="canvas-wrap" ref={container} data-testid="beam-canvas" data-hint={hint?.label} data-panning={panActive||undefined} style={{background:palette.bg,width:'100%',height:'100%'}} onDragOver={e=>{e.preventDefault();const r=e.currentTarget.getBoundingClientRect();preview((e.dataTransfer.types.includes('application/ligou-tool')?tool:'select'),toWorld({x:e.clientX-r.left,y:e.clientY-r.top}));}} onDrop={e=>{e.preventDefault();const active=e.dataTransfer.getData('application/ligou-tool') as Tool;const r=e.currentTarget.getBoundingClientRect(); if(active)place(active,toWorld({x:e.clientX-r.left,y:e.clientY-r.top}));}}>
     {expanded&&<CanvasTools tool={tool} onTool={onTool} onArch={onArch}/>}
-    {sizeOpen&&<CanvasSizeDialog value={canvasSize} expanded={expanded} onApply={applyCanvasSize} onClose={()=>setSizeOpen(false)}/>}
 
     <div className="canvas-caption"><span className="live-dot"/>二维结构工作台<span className="caption-separator">/</span><span>单位 m · kN</span></div>
-    <div className="canvas-controls" data-canvas-ui><button className="canvas-size-trigger" aria-label="画布大小" title="画布大小" onClick={()=>setSizeOpen(true)}><Settings2 size={15}/><span>尺寸</span></button><button className="canvas-expand" title={expanded?"退出展开画布（Esc）":"展开画布"} aria-label={expanded?"退出展开画布":"展开画布"} aria-pressed={expanded} onClick={onToggleExpanded}>{expanded?<Minimize2 size={15}/>:<Maximize2 size={15}/>}<span>{expanded?'退出全屏':'全屏'}</span></button><button title="缩小视图" aria-label="缩小视图" onClick={()=>setZoom(z=>Math.max(.001,z/1.2))}><Minus size={15}/></button><span>{Math.round(zoom*100)}%</span><button title="放大视图" aria-label="放大视图" onClick={()=>setZoom(z=>Math.min(8,z*1.2))}><Plus size={15}/></button><button title="适应模型" aria-label="适应模型" onClick={fit}><Crosshair size={16}/></button><button className="canvas-clear" title="清空全部节点、杆件、支座和荷载（可撤销）" aria-label="清空模型" onClick={clearAll}><Trash2 size={14}/><span>清空</span></button></div>
+    <div className="canvas-controls" data-canvas-ui><button className="canvas-expand" title={expanded?"退出展开画布（Esc）":"展开画布"} aria-label={expanded?"退出展开画布":"展开画布"} aria-pressed={expanded} onClick={onToggleExpanded}>{expanded?<Minimize2 size={15}/>:<Maximize2 size={15}/>}<span>{expanded?'退出全屏':'全屏'}</span></button><button title="缩小视图" aria-label="缩小视图" onClick={()=>setZoom(z=>Math.max(.001,z/1.2))}><Minus size={15}/></button><span>{Math.round(zoom*100)}%</span><button title="放大视图" aria-label="放大视图" onClick={()=>setZoom(z=>Math.min(8,z*1.2))}><Plus size={15}/></button><button title="适应模型" aria-label="适应模型" onClick={fit}><Crosshair size={16}/></button><button className="canvas-clear" title="清空全部节点、杆件、支座和荷载（可撤销）" aria-label="清空模型" onClick={clearAll}><Trash2 size={14}/><span>清空</span></button></div>
     {tool==='polyline'&&<div className="polyline-controls"><span>{draftPoints.length===0?'① 点击起点':draftPoints.length===1?'② 点击转角':draftPoints.length===2?'③ 点击终点形成直角，再点完成':'④ 点击完成折杆，或继续添加转角'} · {draftPoints.length} 点</span><button disabled={draftPoints.length<2} onClick={finishPolyline}>完成折杆</button><button disabled={!draftPoints.length} onClick={()=>setDraftPoints(p=>p.slice(0,-1))}>退回一点</button><button onClick={()=>onTool('select')}>取消绘制</button></div>}
     <Stage width={width} height={height} ref={stage} onMouseLeave={()=>{setSelectionBox(null);if(!panActive){setCursor(null);setHint(null);}}} onMouseDown={e=>{if(tool==='select'&&e.evt.button===0&&e.target===e.target.getStage()){const p=stage.current?.getPointerPosition();if(p){const w=toWorld(p);setSelectionBox({start:w,end:w});}}}} onMouseUp={e=>{if(!selectionBox)return;const moved=Math.hypot(selectionBox.end.x-selectionBox.start.x,selectionBox.end.y-selectionBox.start.y)*scale>4;if(moved){onBatchSelect(boxItems(model,selectionBox.start,selectionBox.end),e.evt.shiftKey);suppressClick.current=true;}setSelectionBox(null);}} onMouseMove={()=>{if(panActive)return;const p=stage.current?.getPointerPosition();if(p){const w=toWorld(p);if(selectionBox)setSelectionBox({...selectionBox,end:w});setCursor(w);preview(tool,w);}}} onClick={e=>{if(suppressClick.current){suppressClick.current=false;return;}if(('button' in e.evt&&e.evt.button!==0)||panActive)return;if(e.target===e.target.getStage()){const p=stage.current?.getPointerPosition();if(p)place(tool,toWorld(p));}}}>
       <Layer>
-        {canvasSize.showRange&&<Group listening={false}><Rect x={toScreen({x:0,y:canvasSize.worldHeight}).x} y={toScreen({x:0,y:canvasSize.worldHeight}).y} width={canvasSize.worldWidth*scale} height={canvasSize.worldHeight*scale} stroke={palette.accent} strokeWidth={1} dash={[8,5]} opacity={.65}/><Text x={toScreen({x:0,y:canvasSize.worldHeight}).x+6} y={toScreen({x:0,y:canvasSize.worldHeight}).y+6} text={`绘图范围 ${fmt(canvasSize.worldWidth)} × ${fmt(canvasSize.worldHeight)} m`} fill={palette.accent} fontSize={11}/></Group>}
         {gridX.map(x=><Line key={`gx${x}`} points={[toScreen({x,y:0}).x,50,toScreen({x,y:0}).x,height-32]} stroke={Number.isInteger(x)?palette.majorGrid:palette.grid} strokeWidth={1} listening={false}/>)}
         {gridY.map(y=><Line key={`gy${y}`} points={[0,toScreen({x:0,y}).y,width,toScreen({x:0,y}).y]} stroke={Number.isInteger(y)?palette.majorGrid:palette.grid} strokeWidth={1} listening={false}/>)}
         {gridY.filter(y=>Number.isInteger(y)).map(y=><Text key={`yt${y}`} x={6} y={toScreen({x:0,y}).y-12} text={`y ${fmt(y)}`} fontSize={9} fill={palette.muted} listening={false}/>)}

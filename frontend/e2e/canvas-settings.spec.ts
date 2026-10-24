@@ -1,32 +1,60 @@
-import {test,expect} from '@playwright/test';
-const model=(page:import('@playwright/test').Page)=>page.evaluate(()=>JSON.parse(localStorage.getItem('ligou-lab-workspace-v1')!).history.present);
+import {test,expect,type Page} from '@playwright/test';
+const model=(page:Page)=>page.evaluate(()=>JSON.parse(localStorage.getItem('ligou-lab-workspace-v1')!).history.present);
+async function drag(page:Page,name:string,dx:number,dy:number){const box=(await page.getByRole('separator',{name}).boundingBox())!;await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+dx,box.y+box.height/2+dy,{steps:12});await page.mouse.up();}
+async function visibleControls(page:Page){for(const name of ['展开画布','适应模型','清空模型']){const control=page.getByRole('button',{name,exact:true});await expect(control).toBeInViewport({ratio:1});expect(await control.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));})).toBe(true);}}
 test.beforeEach(async({page})=>{await page.goto('/');await expect(page.getByTestId('max-moment')).toContainText('15');});
-test('custom pixels and metre range persist without changing the structural model',async({page})=>{
- const before=await model(page);
- await page.getByRole('button',{name:'画布大小',exact:true}).click();
- await page.getByRole('button',{name:'1280 × 720',exact:true}).click();
- await page.getByLabel('画布宽度',{exact:true}).fill('1200');
- await page.getByLabel('画布高度',{exact:true}).fill('640');
- await page.getByLabel('显示绘图范围并适应视图').check();
- await page.getByLabel('模型空间宽度',{exact:true}).fill('20');
- await page.getByLabel('模型空间高度',{exact:true}).fill('10');
- await page.screenshot({path:'../work/canvas-size-dialog.png'});
- await page.getByRole('button',{name:'应用画布大小',exact:true}).click();
- const canvas=page.getByTestId('beam-canvas');
- await expect.poll(async()=>{const b=await canvas.boundingBox();return [b?.width,b?.height];}).toEqual([1200,640]);
- expect(await model(page)).toEqual(before);
- await page.reload();await expect.poll(async()=>(await canvas.boundingBox())?.height).toBe(640);
- await page.getByRole('button',{name:'画布大小',exact:true}).click();
- await expect(page.getByLabel('模型空间宽度',{exact:true})).toHaveValue('20');
- await expect(page.getByLabel('显示绘图范围并适应视图')).toBeChecked();
- await page.getByRole('button',{name:'关闭画布大小设置',exact:true}).click();
+
+test('legacy 1080p settings cannot hide controls and pixel settings are removed',async({page})=>{
+ await page.evaluate(()=>localStorage.setItem('ligou-lab-canvas-size-v1',JSON.stringify({mode:'custom',width:1920,height:1080,showRange:true,worldWidth:20,worldHeight:10})));
+ await page.reload();
+ await expect(page.getByRole('button',{name:'画布大小',exact:true})).toHaveCount(0);
+ await visibleControls(page);
+ await expect.poll(async()=>(await page.getByTestId('beam-canvas').boundingBox())!.width).toBeLessThan(1000);
  await page.getByRole('button',{name:'展开画布',exact:true}).click();
- await expect.poll(async()=>(await canvas.boundingBox())?.width).toBe(1440);
- await expect.poll(async()=>(await canvas.boundingBox())?.height).toBe(1100);
+ await expect.poll(async()=>(await page.getByTestId('beam-canvas').boundingBox())!.height).toBe(1100);
  await page.getByRole('button',{name:'退出展开画布',exact:true}).click();
- await expect.poll(async()=>(await canvas.boundingBox())?.width).toBe(1200);
+ await visibleControls(page);
+});
+
+test('dragging all three boundaries resizes panes, persists and preserves the model',async({page})=>{
+ const before=await model(page),canvas=page.getByTestId('beam-canvas');
+ const left=(await page.locator('.library').boundingBox())!,right=(await page.locator('.inspector').boundingBox())!,original=(await canvas.boundingBox())!;
+ await drag(page,'调整构件库宽度',65,0);
+ await expect.poll(async()=>(await page.locator('.library').boundingBox())!.width).toBeCloseTo(left.width+65,0);
+ await drag(page,'调整属性面板宽度',-55,0);
+ await expect.poll(async()=>(await page.locator('.inspector').boundingBox())!.width).toBeCloseTo(right.width+55,0);
+ await drag(page,'调整画布与分析区高度',0,70);
+ await expect.poll(async()=>(await canvas.boundingBox())!.height).toBeCloseTo(original.height+70,0);
+ await expect.poll(async()=>(await canvas.boundingBox())!.width).toBeCloseTo(original.width-120,0);
+ await visibleControls(page);expect(await model(page)).toEqual(before);
+ await page.reload();await expect.poll(async()=>(await canvas.boundingBox())!.height).toBeCloseTo(original.height+70,0);
+ await page.getByRole('button',{name:'展开画布',exact:true}).click();
+ await page.getByRole('button',{name:'退出展开画布',exact:true}).click();
+ await expect.poll(async()=>(await canvas.boundingBox())!.height).toBeCloseTo(original.height+70,0);
+ await page.screenshot({path:'../work/resizable-workspace.png'});
+ await page.getByRole('button',{name:'恢复默认布局'}).click();
+ await expect.poll(async()=>(await canvas.boundingBox())!.height).toBeCloseTo(original.height,0);
+ await expect.poll(async()=>(await page.locator('.library').boundingBox())!.width).toBeCloseTo(left.width,0);
+ await expect.poll(async()=>(await page.locator('.inspector').boundingBox())!.width).toBeCloseTo(right.width,0);
  expect(await model(page)).toEqual(before);
 });
+
+test('boundaries support keyboard and double click reset',async({page})=>{
+ const split=page.getByRole('separator',{name:'调整构件库宽度'}),left=page.locator('.library');
+ await split.focus();await page.keyboard.press('ArrowRight');await expect.poll(async()=>(await left.boundingBox())!.width).toBe(198);
+ await split.dblclick();await expect.poll(async()=>(await left.boundingBox())!.width).toBe(188);
+});
+
+for(const size of [{width:1024,height:768},{width:1382,height:956},{width:1920,height:1080}])test(`controls remain reachable after extreme drags at ${size.width}`,async({page})=>{
+ await page.setViewportSize(size);
+ await drag(page,'调整构件库宽度',600,0);await drag(page,'调整属性面板宽度',-600,0);await drag(page,'调整画布与分析区高度',0,1000);
+ await visibleControls(page);
+ const canvas=(await page.getByTestId('beam-canvas').boundingBox())!,results=(await page.locator('.results-panel').boundingBox())!;
+ expect(canvas.x+canvas.width).toBeLessThanOrEqual(size.width);expect(results.height).toBeGreaterThanOrEqual(100);
+ await page.getByRole('button',{name:'展开画布',exact:true}).click();await expect.poll(async()=>(await page.getByTestId('beam-canvas').boundingBox())!.width).toBe(size.width);
+ await page.getByRole('button',{name:'退出展开画布',exact:true}).click();await visibleControls(page);
+});
+
 test('fullscreen palette exposes every tool, collapses, and opens the arch dialog',async({page})=>{
  await page.getByRole('button',{name:'展开画布',exact:true}).click();
  const palette=page.getByRole('toolbar',{name:'全屏绘图工具'});
@@ -41,23 +69,4 @@ test('fullscreen palette exposes every tool, collapses, and opens the arch dialo
  await expect(page.getByRole('dialog',{name:'绘制拱形杆'})).toBeVisible();
  await page.getByRole('button',{name:'关闭拱形设置',exact:true}).click();
  await expect(palette).toBeVisible();
-});
-test('restoring automatic size returns to the normal canvas',async({page})=>{
- await page.evaluate(()=>localStorage.setItem('ligou-lab-canvas-size-v1',JSON.stringify({mode:'custom',width:960,height:540,showRange:false,worldWidth:20,worldHeight:10})));
- await page.reload();
- await page.getByRole('button',{name:'画布大小',exact:true}).click();
- await page.getByLabel('自动适应工作区').check();
- await page.getByRole('button',{name:'应用画布大小',exact:true}).click();
- await expect.poll(async()=>(await page.getByTestId('beam-canvas').boundingBox())?.height).toBe(384);
-});
-
-test('custom height in wide split layout leaves validation below the canvas',async({page})=>{
- await page.setViewportSize({width:1920,height:1080});
- await page.getByRole('button',{name:'画布大小',exact:true}).click();
- await page.getByRole('button',{name:'1280 × 720',exact:true}).click();
- await page.getByRole('button',{name:'应用画布大小',exact:true}).click();
- const viewport=page.locator('.canvas-viewport');
- await expect.poll(async()=>(await viewport.boundingBox())!.height).toBe(720);
- const canvas=await viewport.boundingBox(),validation=await page.locator('.validation-bar').boundingBox();
- expect(validation!.y).toBeGreaterThanOrEqual(canvas!.y+canvas!.height-1);
 });
