@@ -25,3 +25,9 @@ export function initialViewport(nodes: readonly Point[], width: number, height =
     ? defaultViewport(height)
     : fitViewport(nodes, width, height);
 }
+
+/** Show a metre-based reference rectangle without modifying model coordinates. */
+export function drawingRangeViewport(rangeWidth:number,rangeHeight:number,width:number,height:number):Viewport {
+ const scale=Math.min(Math.max(40,width-200)/rangeWidth,Math.max(40,height-150)/rangeHeight);
+ return {center:{x:rangeWidth/2,y:rangeHeight/2},zoom:Math.max(.001,Math.min(8,scale/baseScale(width))),originY:height/2+15};
+}

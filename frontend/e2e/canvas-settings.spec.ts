@@ -1,0 +1,63 @@
+import {test,expect} from '@playwright/test';
+const model=(page:import('@playwright/test').Page)=>page.evaluate(()=>JSON.parse(localStorage.getItem('ligou-lab-workspace-v1')!).history.present);
+test.beforeEach(async({page})=>{await page.goto('/');await expect(page.getByTestId('max-moment')).toContainText('15');});
+test('custom pixels and metre range persist without changing the structural model',async({page})=>{
+ const before=await model(page);
+ await page.getByRole('button',{name:'画布大小',exact:true}).click();
+ await page.getByRole('button',{name:'1280 × 720',exact:true}).click();
+ await page.getByLabel('画布宽度',{exact:true}).fill('1200');
+ await page.getByLabel('画布高度',{exact:true}).fill('640');
+ await page.getByLabel('显示绘图范围并适应视图').check();
+ await page.getByLabel('模型空间宽度',{exact:true}).fill('20');
+ await page.getByLabel('模型空间高度',{exact:true}).fill('10');
+ await page.screenshot({path:'../work/canvas-size-dialog.png'});
+ await page.getByRole('button',{name:'应用画布大小',exact:true}).click();
+ const canvas=page.getByTestId('beam-canvas');
+ await expect.poll(async()=>{const b=await canvas.boundingBox();return [b?.width,b?.height];}).toEqual([1200,640]);
+ expect(await model(page)).toEqual(before);
+ await page.reload();await expect.poll(async()=>(await canvas.boundingBox())?.height).toBe(640);
+ await page.getByRole('button',{name:'画布大小',exact:true}).click();
+ await expect(page.getByLabel('模型空间宽度',{exact:true})).toHaveValue('20');
+ await expect(page.getByLabel('显示绘图范围并适应视图')).toBeChecked();
+ await page.getByRole('button',{name:'关闭画布大小设置',exact:true}).click();
+ await page.getByRole('button',{name:'展开画布',exact:true}).click();
+ await expect.poll(async()=>(await canvas.boundingBox())?.width).toBe(1440);
+ await expect.poll(async()=>(await canvas.boundingBox())?.height).toBe(1100);
+ await page.getByRole('button',{name:'退出展开画布',exact:true}).click();
+ await expect.poll(async()=>(await canvas.boundingBox())?.width).toBe(1200);
+ expect(await model(page)).toEqual(before);
+});
+test('fullscreen palette exposes every tool, collapses, and opens the arch dialog',async({page})=>{
+ await page.getByRole('button',{name:'展开画布',exact:true}).click();
+ const palette=page.getByRole('toolbar',{name:'全屏绘图工具'});
+ for(const name of ['节点','杆件','直角杆','拱形杆','作用点','铰支座','滚动支座','固定支座','集中力','均布荷载','集中弯矩'])await expect(palette.getByRole('button',{name:`全屏${name}`,exact:true})).toBeVisible();
+ await page.screenshot({path:'../work/fullscreen-palette.png'});
+ await palette.getByRole('button',{name:'全屏直角杆',exact:true}).click();
+ await expect(palette.getByRole('button',{name:'全屏直角杆',exact:true})).toHaveAttribute('aria-pressed','true');
+ await palette.getByRole('button',{name:'收起绘图工具',exact:true}).click();
+ await expect(palette.getByRole('button',{name:'全屏节点',exact:true})).toHaveCount(0);
+ await palette.getByRole('button',{name:'展开绘图工具',exact:true}).click();
+ await palette.getByRole('button',{name:'全屏拱形杆',exact:true}).click();
+ await expect(page.getByRole('dialog',{name:'绘制拱形杆'})).toBeVisible();
+ await page.getByRole('button',{name:'关闭拱形设置',exact:true}).click();
+ await expect(palette).toBeVisible();
+});
+test('restoring automatic size returns to the normal canvas',async({page})=>{
+ await page.evaluate(()=>localStorage.setItem('ligou-lab-canvas-size-v1',JSON.stringify({mode:'custom',width:960,height:540,showRange:false,worldWidth:20,worldHeight:10})));
+ await page.reload();
+ await page.getByRole('button',{name:'画布大小',exact:true}).click();
+ await page.getByLabel('自动适应工作区').check();
+ await page.getByRole('button',{name:'应用画布大小',exact:true}).click();
+ await expect.poll(async()=>(await page.getByTestId('beam-canvas').boundingBox())?.height).toBe(384);
+});
+
+test('custom height in wide split layout leaves validation below the canvas',async({page})=>{
+ await page.setViewportSize({width:1920,height:1080});
+ await page.getByRole('button',{name:'画布大小',exact:true}).click();
+ await page.getByRole('button',{name:'1280 × 720',exact:true}).click();
+ await page.getByRole('button',{name:'应用画布大小',exact:true}).click();
+ const viewport=page.locator('.canvas-viewport');
+ await expect.poll(async()=>(await viewport.boundingBox())!.height).toBe(720);
+ const canvas=await viewport.boundingBox(),validation=await page.locator('.validation-bar').boundingBox();
+ expect(validation!.y).toBeGreaterThanOrEqual(canvas!.y+canvas!.height-1);
+});
